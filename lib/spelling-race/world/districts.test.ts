@@ -60,22 +60,32 @@ describe('district world registry', () => {
     const world = createDistrictWorld(SINGAPORE_HEARTLAND_ROUTE, assets(SINGAPORE_HEARTLAND_ROUTE), palette())
     const curve = createRouteCurve(SINGAPORE_HEARTLAND_ROUTE)
 
-    for (const [landmarkId, partName] of [
-      ['hdb-east-slab', 'bevelled_slab'],
-      ['shophouse-row-west', 'five_varied_bays'],
-    ] as const) {
-      const placement = SINGAPORE_HEARTLAND_ROUTE.landmarks.find((landmark) => landmark.id === landmarkId)!
-      const tangent = curve.getTangentAt(placement.progress).normalize()
-      const right = new THREE.Vector3(tangent.z, 0, -tangent.x).normalize()
-      const facadeFront = new THREE.Vector3(0, 0, -1)
-      const landmark = landmarkRoots(world.root).find((candidate) => candidate.userData.landmarkId === landmarkId)!
-      const part = landmark.getObjectByName(partName)!
-      part.updateWorldMatrix(true, false)
-      facadeFront.transformDirection(part.matrixWorld)
+    // hdb-east-slab uses real GLB models — check the overall building orientation
+    const hdbPlacement = SINGAPORE_HEARTLAND_ROUTE.landmarks.find((l) => l.id === 'hdb-east-slab')!
+    const hdbTangent = curve.getTangentAt(hdbPlacement.progress).normalize()
+    const hdbRight = new THREE.Vector3(hdbTangent.z, 0, -hdbTangent.x).normalize()
+    const hdbLandmark = landmarkRoots(world.root).find((c) => c.userData.landmarkId === 'hdb-east-slab')!
+    // The model is the first child of the landmark root
+    const hdbModel = hdbLandmark.children[0] as THREE.Group
+    const buildingFront = new THREE.Vector3(0, 0, -1)
+    hdbModel.updateWorldMatrix(true, false)
+    buildingFront.transformDirection(hdbModel.matrixWorld)
+    // After flip: detailed/striped face (+Z) now faces track; model front (-Z) faces away
+    expect(buildingFront.dot(hdbRight) * Math.sign(hdbPlacement.lateral)).toBeGreaterThan(0.98)
+    expect(Math.abs(buildingFront.dot(hdbTangent))).toBeLessThan(0.2)
 
-      expect(facadeFront.dot(right) * Math.sign(placement.lateral)).toBeLessThan(-0.98)
-      expect(Math.abs(facadeFront.dot(tangent))).toBeLessThan(0.2)
-    }
+    // shophouse-row-west still uses original model with named parts
+    const shophousePlacement = SINGAPORE_HEARTLAND_ROUTE.landmarks.find((l) => l.id === 'shophouse-row-west')!
+    const shopTangent = curve.getTangentAt(shophousePlacement.progress).normalize()
+    const shopRight = new THREE.Vector3(shopTangent.z, 0, -shopTangent.x).normalize()
+    const shopFacadeFront = new THREE.Vector3(0, 0, -1)
+    const shopLandmark = landmarkRoots(world.root).find((c) => c.userData.landmarkId === 'shophouse-row-west')!
+    const shopPart = shopLandmark.getObjectByName('five_varied_bays')!
+    shopPart.updateWorldMatrix(true, false)
+    shopFacadeFront.transformDirection(shopPart.matrixWorld)
+
+    expect(shopFacadeFront.dot(shopRight) * Math.sign(shophousePlacement.lateral)).toBeGreaterThan(0.98)
+    expect(Math.abs(shopFacadeFront.dot(shopTangent))).toBeLessThan(0.2)
   })
 
   it('hangs one red-white flag pair over every shophouse bay', () => {
@@ -94,23 +104,57 @@ describe('district world registry', () => {
 
     expect(landmarkRoots(world.root).map((root) => [root.userData.landmarkId, root.userData.detailTier])).toEqual([
       ['hdb-east-slab', 'near'],
+      ['hdb-grid-1', 'near'],
       ['hdb-east-point', 'near'],
+      ['hdb-grid-2', 'middle'],
       ['hdb-east-lamp', 'near'],
+      ['hdb-grid-3', 'near'],
       ['hdb-central-slab', 'near'],
+      ['hdb-grid-4', 'middle'],
       ['hdb-central-point', 'middle'],
+      ['hdb-grid-5', 'near'],
       ['hdb-west-slab', 'middle'],
+      ['hdb-grid-6', 'middle'],
+      ['hdb-hawker-1', 'middle'],
+      ['hdb-hawker-2', 'near'],
+      ['supertree-1', 'near'],
+      ['supertree-2', 'middle'],
+      ['supertree-3', 'near'],
+      ['supertree-4', 'middle'],
+      ['supertree-5', 'near'],
+      ['hdb-hawker-3', 'middle'],
+      ['hdb-hawker-4', 'middle'],
       ['hawker-centre', 'near'],
       ['hawker-rain-tree', 'near'],
       ['hawker-table-east', 'middle'],
       ['hawker-table-west', 'middle'],
+      ['hdb-hawker-5', 'near'],
+      ['hdb-hawker-6', 'middle'],
+      ['hdb-hawker-7', 'distant'],
+      ['mbs-skyline', 'distant'],
+      ['hdb-hawker-8', 'near'],
+      ['hdb-hawker-9', 'middle'],
+      ['flyer-skyline', 'distant'],
+      ['hdb-hawker-10', 'middle'],
+      ['hdb-hawker-11', 'near'],
       ['rail-span-start', 'near'],
+      ['hdb-rail-1', 'middle'],
+      ['hdb-rail-2', 'near'],
       ['rail-station', 'middle'],
       ['shophouse-row-east', 'near'],
       ['rail-span-middle', 'near'],
+      ['hdb-rail-3', 'middle'],
+      ['hdb-rail-4', 'near'],
       ['shophouse-row-west', 'middle'],
       ['rail-span-end', 'near'],
+      ['hdb-rail-5', 'middle'],
       ['skyline-slab-east', 'distant'],
+      ['hdb-rail-6', 'distant'],
       ['skyline-slab-west', 'distant'],
+      ['hdb-rail-7', 'distant'],
+      ['hdb-rail-8', 'distant'],
+      ['hdb-rail-9', 'distant'],
+      ['hdb-rail-10', 'distant'],
     ])
   })
 
@@ -119,25 +163,39 @@ describe('district world registry', () => {
 
     world.setQuality('high')
     expect(visibleLandmarks(world.root)).toEqual([
-      'hdb-east-slab', 'hdb-east-point', 'hdb-east-lamp', 'hdb-central-slab', 'hdb-central-point',
-      'hdb-west-slab', 'hawker-centre', 'hawker-rain-tree', 'hawker-table-east', 'hawker-table-west',
-      'rail-span-start', 'rail-station', 'shophouse-row-east', 'rail-span-middle', 'shophouse-row-west',
-      'rail-span-end', 'skyline-slab-east', 'skyline-slab-west',
+      'hdb-east-slab', 'hdb-grid-1', 'hdb-east-point', 'hdb-grid-2', 'hdb-east-lamp',
+      'hdb-grid-3', 'hdb-central-slab', 'hdb-grid-4', 'hdb-central-point', 'hdb-grid-5',
+      'hdb-west-slab', 'hdb-grid-6', 'hdb-hawker-1', 'hdb-hawker-2', 'supertree-1',
+      'supertree-2', 'supertree-3', 'supertree-4', 'supertree-5', 'hdb-hawker-3',
+      'hdb-hawker-4', 'hawker-centre', 'hawker-rain-tree', 'hawker-table-east', 'hawker-table-west',
+      'hdb-hawker-5', 'hdb-hawker-6', 'hdb-hawker-7', 'mbs-skyline', 'hdb-hawker-8',
+      'hdb-hawker-9', 'flyer-skyline', 'hdb-hawker-10', 'hdb-hawker-11', 'rail-span-start',
+      'hdb-rail-1', 'hdb-rail-2', 'rail-station', 'shophouse-row-east', 'rail-span-middle',
+      'hdb-rail-3', 'hdb-rail-4', 'shophouse-row-west', 'rail-span-end', 'hdb-rail-5',
+      'skyline-slab-east', 'hdb-rail-6', 'skyline-slab-west', 'hdb-rail-7', 'hdb-rail-8',
+      'hdb-rail-9', 'hdb-rail-10',
     ])
 
     world.setQuality('balanced')
     expect(visibleLandmarks(world.root)).toEqual([
-      'hdb-east-slab', 'hdb-east-point', 'hdb-east-lamp', 'hdb-central-slab', 'hdb-central-point',
-      'hdb-west-slab', 'hawker-centre', 'hawker-rain-tree', 'hawker-table-east', 'hawker-table-west',
-      'rail-span-start', 'rail-station', 'shophouse-row-east', 'rail-span-middle', 'shophouse-row-west',
-      'rail-span-end',
+      'hdb-east-slab', 'hdb-grid-1', 'hdb-east-point', 'hdb-grid-2', 'hdb-east-lamp',
+      'hdb-grid-3', 'hdb-central-slab', 'hdb-grid-4', 'hdb-central-point', 'hdb-grid-5',
+      'hdb-west-slab', 'hdb-grid-6', 'hdb-hawker-1', 'hdb-hawker-2', 'supertree-1',
+      'supertree-2', 'supertree-3', 'supertree-4', 'supertree-5', 'hdb-hawker-3',
+      'hdb-hawker-4', 'hawker-centre', 'hawker-rain-tree', 'hawker-table-east', 'hawker-table-west',
+      'hdb-hawker-5', 'hdb-hawker-6', 'hdb-hawker-8', 'hdb-hawker-9', 'hdb-hawker-10',
+      'hdb-hawker-11', 'rail-span-start', 'hdb-rail-1', 'hdb-rail-2', 'rail-station',
+      'shophouse-row-east', 'rail-span-middle', 'hdb-rail-3', 'hdb-rail-4', 'shophouse-row-west',
+      'rail-span-end', 'hdb-rail-5',
     ])
 
     world.setQuality('safe')
     expect(visibleLandmarks(world.root)).toEqual([
-      'hdb-east-slab', 'hdb-east-point', 'hdb-east-lamp', 'hdb-central-slab', 'hdb-west-slab',
-      'hawker-centre', 'hawker-rain-tree', 'rail-span-start', 'shophouse-row-east', 'rail-span-middle',
-      'shophouse-row-west', 'rail-span-end',
+      'hdb-east-slab', 'hdb-grid-1', 'hdb-east-point', 'hdb-east-lamp', 'hdb-grid-3',
+      'hdb-central-slab', 'hdb-grid-5', 'hdb-west-slab', 'hdb-hawker-2', 'supertree-1',
+      'supertree-3', 'supertree-5', 'hawker-centre', 'hawker-rain-tree', 'hdb-hawker-5',
+      'hdb-hawker-8', 'hdb-hawker-11', 'rail-span-start', 'hdb-rail-2', 'shophouse-row-east',
+      'rail-span-middle', 'hdb-rail-4', 'shophouse-row-west', 'rail-span-end',
     ])
   })
 

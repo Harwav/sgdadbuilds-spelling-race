@@ -39,9 +39,11 @@ export type RaceState = {
   elapsedSeconds: number
   finished: boolean
   placement: RacePlacement
+  speedModifier: number
+  handlingModifier: number
 }
 
-export function createRace(input: { playerColour: KartColour; seed: number }): RaceState {
+export function createRace(input: { playerColour: KartColour; seed: number; speedModifier?: number; handlingModifier?: number }): RaceState {
   const random = seededRandom(input.seed)
   const rivalColours = rivalColoursFor(input.playerColour)
   return {
@@ -56,6 +58,8 @@ export function createRace(input: { playerColour: KartColour; seed: number }): R
     elapsedSeconds: 0,
     finished: false,
     placement: 1,
+    speedModifier: input.speedModifier ?? 0,
+    handlingModifier: input.handlingModifier ?? 0,
   }
 }
 
@@ -63,13 +67,14 @@ export function stepRace(state: RaceState, input: { deltaSeconds: number; steeri
   if (state.finished) return state
 
   const deltaSeconds = Math.max(0, input.deltaSeconds)
+  const lateralSpeed = LATERAL_SPEED * (1 + state.handlingModifier)
   const lateralPosition = clamp(
-    state.player.lateralPosition + clamp(input.steering, -1, 1) * LATERAL_SPEED * deltaSeconds,
+    state.player.lateralPosition + clamp(input.steering, -1, 1) * lateralSpeed * deltaSeconds,
     -1,
     1,
   )
   const grassFactor = Math.abs(lateralPosition) >= 0.7 ? GRASS_FACTOR : 1
-  const playerSpeed = PLAYER_SPEED * (1 + state.player.boost * BOOST_SPEED_FACTOR) * grassFactor
+  const playerSpeed = PLAYER_SPEED * (1 + state.player.boost * BOOST_SPEED_FACTOR + state.speedModifier) * grassFactor
   const playerProgress = Math.min(FINISH_DISTANCE, state.player.progress + playerSpeed * deltaSeconds)
   const player = {
     ...state.player,

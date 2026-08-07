@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { track } from '@/lib/analytics'
 import { createRaceAudio, type RaceAudio } from '@/lib/spelling-race/raceAudio'
 import { applyBoost, createRace, stepRace, TRACK_LENGTH, type RaceState } from '@/lib/spelling-race/raceSimulation'
+import { refitStore } from '@/lib/spelling-race/refitStore'
 import { createTiltPort, type TiltPort } from '@/lib/spelling-race/tiltController'
 import { evaluateSightWordAnswer } from '@/lib/spelling-race/transcriptMatcher'
+import type { CarId } from '@/lib/spelling-race/carStore'
 import type { Difficulty, KartColour, RaceRecap, SteeringMode } from '@/lib/spelling-race/types'
 import { createRecognitionPort, voiceGateForError, type RecognitionPort } from '@/lib/spelling-race/voiceCapability'
 import { createVoiceDiagnosticRecorder } from '@/lib/spelling-race/voiceDiagnostics'
@@ -35,6 +37,9 @@ export type RaceScreenProps = {
   steeringMode: SteeringMode
   route: RouteCard
   assets: LoadedWorldAssets
+  speedModifier?: number
+  handlingModifier?: number
+  equippedCarId?: CarId | null
   onFinished(result: RaceRecap): void
   onExit(): void
 }
@@ -52,7 +57,7 @@ const FIXED_STEP_SECONDS = 1 / 60
 const DEFAULT_SEED = 2_026_073
 const DEFAULT_COUNTDOWN_MS = 2_400
 
-export default function RaceScreen({ difficulty, kartColour, steeringMode, route, assets, onFinished, onExit }: RaceScreenProps) {
+export default function RaceScreen({ difficulty, kartColour, steeringMode, route, assets, speedModifier = 0, handlingModifier = 0, equippedCarId = null, onFinished, onExit }: RaceScreenProps) {
   const initialRace = useMemo(() => createRace({ playerColour: kartColour, seed: DEFAULT_SEED }), [kartColour])
   const initialDirector = useMemo(() => createWordDirector(bankForDifficulty(difficulty)), [difficulty])
   const [stage, setStage] = useState<RaceStage>('grid')
@@ -102,6 +107,10 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
   const reducedMotion = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     [],
+  )
+  const equippedCarModel = useMemo(
+    () => (equippedCarId ? (assets.models.get(equippedCarId) ?? null) : null),
+    [equippedCarId, assets],
   )
   const voiceDebug = useMemo(
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('voice-debug'),
@@ -425,6 +434,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
       .filter((result) => result.outcome === 'timeout' || result.outcome === 'assisted')
       .map((result) => result.word)
       .filter((word, index, words) => words.indexOf(word) === index)
+    if (practiceWords.length > 0) refitStore.addSkippedWords(practiceWords)
     const fastestWords = [...results]
       .filter((result) => result.outcome === 'accepted' && result.elapsedMs !== null && !practiceWords.includes(result.word))
       .sort((left, right) => (left.elapsedMs ?? WORD_WINDOW_MS) - (right.elapsedMs ?? WORD_WINDOW_MS))
@@ -552,7 +562,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     if (!isCompleteWorldAssetBundle(route, assets)) return
     const config = process.env.NODE_ENV !== 'production' ? window.__tinyGrandPrixTest : undefined
     const seed = config?.seed ?? DEFAULT_SEED
-    const nextRace = createRace({ playerColour: kartColour, seed })
+    const nextRace = createRace({ playerColour: kartColour, seed, speedModifier, handlingModifier })
     const shuffle = seededShuffle(seed ^ 0x51a7)
     const nextDirector = createWordDirector(bankForDifficulty(difficulty), shuffle)
     raceRef.current = nextRace
@@ -633,6 +643,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
           paused={stage !== 'racing' || frozen}
           route={route}
           assets={assets}
+          equippedCarModel={equippedCarModel}
           onContextLost={() => setWebglIssue(true)}
         />
 

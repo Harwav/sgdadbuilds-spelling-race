@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import ChangeCarScreen from '@/components/spelling-race/ChangeCarScreen'
 import RaceFinish from '@/components/spelling-race/RaceFinish'
 import RaceReadinessGate from '@/components/spelling-race/RaceReadinessGate'
 import RaceScreen from '@/components/spelling-race/RaceScreen'
 import RaceSetup from '@/components/spelling-race/RaceSetup'
+import RefitScreen from '@/components/spelling-race/RefitScreen'
 import { browserWorldAssets } from '@/components/spelling-race/world/loaders'
+import { carStore, type CarId } from '@/lib/spelling-race/carStore'
 import type { Difficulty, KartColour, RaceRecap, SteeringMode } from '@/lib/spelling-race/types'
+import { refitStore, type RefitSnapshot } from '@/lib/spelling-race/refitStore'
 import type { LoadedWorldAssets, WorldAssetCatalogue } from '@/lib/spelling-race/world/assets'
 import {
   createPageWorldAssetLease,
@@ -16,7 +20,7 @@ import {
 import { SINGAPORE_HEARTLAND_ROUTE } from '@/lib/spelling-race/world/routes'
 import type { RouteCard } from '@/lib/spelling-race/world/types'
 
-type SpellingRaceScreen = 'setup' | 'readiness' | 'countdown' | 'race' | 'finished'
+type SpellingRaceScreen = 'setup' | 'readiness' | 'countdown' | 'race' | 'finished' | 'refit' | 'changeCar'
 type SpellingRaceClientProps = {
   readonly assetCatalogue?: WorldAssetCatalogue
   readonly route?: RouteCard
@@ -34,6 +38,8 @@ export default function SpellingRaceClient({
   const [raceKey, setRaceKey] = useState(0)
   const [worldAssetState, setWorldAssetState] = useState<WorldAssetState>({ status: 'loading', attemptKey: 0 })
   const [assetRecoveryDismissed, setAssetRecoveryDismissed] = useState(false)
+  const [refitSnapshot, setRefitSnapshot] = useState<RefitSnapshot>(refitStore.read)
+  const [carSnapshot, setCarSnapshot] = useState(carStore.read)
   const assetLeaseRef = useRef<PageWorldAssetLease | null>(null)
 
   useEffect(() => {
@@ -55,6 +61,14 @@ export default function SpellingRaceClient({
       lease.release()
     }
   }, [assetCatalogue, route])
+
+  useEffect(() => {
+    return refitStore.subscribe(() => setRefitSnapshot(refitStore.read()))
+  }, [])
+
+  useEffect(() => {
+    return carStore.subscribe(() => setCarSnapshot(carStore.read()))
+  }, [])
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return
@@ -93,6 +107,22 @@ export default function SpellingRaceClient({
     assetLeaseRef.current?.retry()
   }
 
+  function goToRefit() {
+    setScreen('refit')
+  }
+
+  function backFromRefit() {
+    setScreen('setup')
+  }
+
+  function goToChangeCar() {
+    setScreen('changeCar')
+  }
+
+  function backFromChangeCar() {
+    setScreen('setup')
+  }
+
   return (
     <main className="ui-font min-h-full px-3 py-4 sm:px-6" style={{ background: 'var(--brand-navy)', color: 'var(--text-primary)' }}>
       <div className="mx-auto w-full max-w-6xl">
@@ -112,9 +142,12 @@ export default function SpellingRaceClient({
             assetStatus={worldAssetState.status}
             assets={worldAssetState.status === 'ready' ? worldAssetState.assets : null}
             assetRecoveryDismissed={assetRecoveryDismissed}
+            skippedWordCount={refitSnapshot.skippedWords.length}
             onDifficultyChange={setDifficulty}
             onKartColourChange={setKartColour}
             onStart={startReadiness}
+            onRefit={goToRefit}
+            onChangeCar={goToChangeCar}
             onRetryAssets={retryWorldAssets}
             onBackFromAssetError={() => setAssetRecoveryDismissed(true)}
           />
@@ -130,12 +163,19 @@ export default function SpellingRaceClient({
             steeringMode={steeringMode}
             route={route}
             assets={worldAssetState.assets}
+            speedModifier={refitSnapshot.speedModifier}
+            handlingModifier={refitSnapshot.handlingModifier}
+            equippedCarId={carSnapshot.equippedCar}
             onFinished={(result) => { setRecap(result); setScreen('finished') }}
             onExit={returnToSetup}
           />
         )}
 
         {screen === 'finished' && recap && <RaceFinish recap={recap} onRaceAgain={raceAgain} onChangeSetup={returnToSetup} />}
+
+        {screen === 'refit' && <RefitScreen onBack={backFromRefit} />}
+
+        {screen === 'changeCar' && <ChangeCarScreen onBack={backFromChangeCar} />}
       </div>
     </main>
   )

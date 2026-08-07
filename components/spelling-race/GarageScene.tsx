@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { KartColour } from '@/lib/spelling-race/types'
 import type { LoadedWorldAssets } from '@/lib/spelling-race/world/assets'
-import { applyKartPaint, createKartFromTemplate, disposeObject3D, readGrandPrixPalette, type GrandPrixPalette } from './kartModel'
+import { carStore, type CarId } from '@/lib/spelling-race/carStore'
+import { applyKartPaint, createCarFromTemplate, createKartFromTemplate, disposeObject3D, readGrandPrixPalette, type GrandPrixPalette } from './kartModel'
 
 type GarageSceneProps = {
   colour: KartColour
@@ -17,13 +18,61 @@ export default function GarageScene({ colour, assets }: GarageSceneProps) {
   const kartRef = useRef<THREE.Group | null>(null)
   const paletteRef = useRef<GrandPrixPalette | null>(null)
   const colourRef = useRef(colour)
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
+  const sceneRef = useRef<THREE.Scene | null>(null)
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const [equippedCarId, setEquippedCarId] = useState<CarId | null>(carStore.read().equippedCar)
+
+  useEffect(() => {
+    return carStore.subscribe(() => setEquippedCarId(carStore.read().equippedCar))
+  }, [])
 
   useEffect(() => {
     colourRef.current = colour
     const kart = kartRef.current
     const palette = paletteRef.current
-    if (kart && palette) applyKartPaint(kart, colour, palette)
+    if (kart && palette) {
+      applyKartPaint(kart, colour, palette)
+      const renderer = rendererRef.current
+      const scene = sceneRef.current
+      const camera = cameraRef.current
+      if (renderer && scene && camera) renderer.render(scene, camera)
+    }
   }, [colour])
+
+  // Swap kart model when equipped car changes
+  useEffect(() => {
+    const scene = sceneRef.current
+    const palette = paletteRef.current
+    if (!scene || !palette) return
+
+    // Remove old kart
+    const oldKart = kartRef.current
+    if (oldKart) {
+      scene.remove(oldKart)
+      disposeObject3D(oldKart)
+    }
+
+    // Build new kart from correct template
+    const carModel = equippedCarId ? (assets.models.get(equippedCarId) ?? null) : null
+    const kart = carModel
+      ? createCarFromTemplate(carModel, colourRef.current, palette, 'garage')
+      : createKartFromTemplate(requiredKartModel(), colourRef.current, palette, 'garage')
+    kart.rotation.y = -0.45
+    kart.position.y = 0.05
+    scene.add(kart)
+    kartRef.current = kart
+
+    const renderer = rendererRef.current
+    const camera = cameraRef.current
+    if (renderer && camera) renderer.render(scene, camera)
+  }, [equippedCarId, assets])
+
+  function requiredKartModel(): THREE.Group {
+    const template = assets.models.get('kart')
+    if (!template) throw new Error('Loaded world model missing: kart')
+    return template
+  }
 
   useEffect(() => {
     const container = containerRef.current
@@ -41,6 +90,9 @@ export default function GarageScene({ colour, assets }: GarageSceneProps) {
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.shadowMap.enabled = true
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
+    rendererRef.current = renderer
+    sceneRef.current = scene
+    cameraRef.current = camera
 
     scene.add(new THREE.HemisphereLight(palette.ambient, palette.gantry, 2.2))
     const key = new THREE.DirectionalLight(palette.sun, 2.8)
@@ -53,9 +105,10 @@ export default function GarageScene({ colour, assets }: GarageSceneProps) {
     scene.add(fill)
 
     buildGarage(scene, palette)
-    const template = assets.models.get('kart')
-    if (!template) throw new Error('Loaded world model missing: kart')
-    const kart = createKartFromTemplate(template, colourRef.current, palette, 'garage')
+    const carModel = equippedCarId ? (assets.models.get(equippedCarId) ?? null) : null
+    const kart = carModel
+      ? createCarFromTemplate(carModel, colourRef.current, palette, 'garage')
+      : createKartFromTemplate(requiredKartModel(), colourRef.current, palette, 'garage')
     kart.rotation.y = -0.45
     kart.position.y = 0.05
     scene.add(kart)
@@ -101,6 +154,9 @@ export default function GarageScene({ colour, assets }: GarageSceneProps) {
       renderer.dispose()
       kartRef.current = null
       paletteRef.current = null
+      rendererRef.current = null
+      sceneRef.current = null
+      cameraRef.current = null
       const testWindow = window as Window & { __tinyGrandPrixGaragePaint?: () => string | null }
       if (readGaragePaint && testWindow.__tinyGrandPrixGaragePaint === readGaragePaint) {
         delete testWindow.__tinyGrandPrixGaragePaint
@@ -122,11 +178,20 @@ export default function GarageScene({ colour, assets }: GarageSceneProps) {
 }
 
 function readKartBodyColour(kart: THREE.Object3D | null): string | null {
-  const body = kart?.getObjectByName('paint_body')
-  if (!(body instanceof THREE.Mesh)) return null
-  const candidate = Array.isArray(body.material) ? body.material[0] : body.material
-  const paint = candidate as THREE.Material & { color?: THREE.Color }
-  return paint.color ? `#${paint.color.getHexString()}` : null
+  if (!kart) return null
+  let result: string | null = null
+  kart.traverse((object) => {
+    if (result !== null || !(object instanceof THREE.Mesh)) return
+    const materials = Array.isArray(object.material) ? object.material : [object.material]
+    for (const mat of materials) {
+      if (mat.name === 'red') {
+        const paint = mat as THREE.Material & { color?: THREE.Color }
+        if (paint.color) result = `#${paint.color.getHexString()}`
+        return
+      }
+    }
+  })
+  return result
 }
 
 function buildGarage(scene: THREE.Scene, palette: GrandPrixPalette): void {

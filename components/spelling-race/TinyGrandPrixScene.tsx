@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import * as THREE from 'three'
 import type { LoadedWorldAssets } from '@/lib/spelling-race/world/assets'
 import type { RaceState } from '@/lib/spelling-race/raceSimulation'
 import type { KartColour } from '@/lib/spelling-race/types'
@@ -17,6 +18,7 @@ export type TinyGrandPrixSceneProps = {
   paused: boolean
   route: RouteCard
   assets: LoadedWorldAssets
+  equippedCarModel: THREE.Group | null
   onContextLost(): void
 }
 

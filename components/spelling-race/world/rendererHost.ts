@@ -20,6 +20,7 @@ import type { RouteCard, RouteId } from '@/lib/spelling-race/world/types'
 import type { GantryPromptHandle } from '../GantryPrompt'
 import {
   applyKartPaint,
+  createCarFromTemplate,
   createKartFromTemplate,
   disposeObject3D,
   readGrandPrixPalette,
@@ -51,6 +52,7 @@ export type RendererHostProps = {
   paused: boolean
   route: RouteCard
   assets: LoadedWorldAssets
+  equippedCarModel: THREE.Group | null
   onContextLost(): void
 }
 
@@ -80,6 +82,7 @@ type RendererHostInput = {
 type VisualCheckpoint = 'void-deck-grid' | 'hawker-sweep' | 'rail-shophouse-turn'
 
 const RIVAL_LANES = [-0.45, 0.1, 0.52] as const
+const KART_COLLISION_RADIUS = 1.05
 const CHECKPOINT_PROGRESS: Readonly<Record<VisualCheckpoint, number>> = {
   'void-deck-grid': 0.03,
   'hawker-sweep': 0.31,
@@ -128,7 +131,9 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
         ? createSignBoardRectProjector(signFrame)
         : null
 
-      const player = createKartFromTemplate(kartTemplate, props.playerColour, palette, 'player')
+      const player = props.equippedCarModel
+        ? createCarFromTemplate(props.equippedCarModel, props.playerColour, palette, 'player')
+        : createKartFromTemplate(kartTemplate, props.playerColour, palette, 'player')
       player.name = 'player-kart'
       scene.add(player)
       const rivals = props.race.rivals.map((rival) => {
@@ -246,6 +251,8 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
         : checkpointProgress + (index - 1) * 4
       if (visual) placeOnTrack(visual, shared.track, rivalProgress, RIVAL_LANES[index] ?? 0, kartSample)
     })
+
+    resolveKartCollisions(player, rivals)
 
     sampleTrack(shared.track, playerProgress, playerLateralPosition, playerSample)
     sampleTrack(shared.track, playerProgress + worldProgressAt(0.055), 0, gantrySample)
@@ -502,4 +509,31 @@ function trackSample(): TrackSample {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
+}
+
+/** Simple cylinder collision: push overlapping karts apart so they don't clip. */
+function resolveKartCollisions(player: THREE.Group, rivals: readonly THREE.Group[]): void {
+  const all = [player, ...rivals]
+
+  for (let i = 0; i < all.length; i += 1) {
+    for (let j = i + 1; j < all.length; j += 1) {
+      const a = all[i]
+      const b = all[j]
+      const radiusA = (a.userData.collisionRadius as number) ?? KART_COLLISION_RADIUS
+      const radiusB = (b.userData.collisionRadius as number) ?? KART_COLLISION_RADIUS
+      const minDist = radiusA + radiusB
+      const dx = a.position.x - b.position.x
+      const dz = a.position.z - b.position.z
+      const dist = Math.sqrt(dx * dx + dz * dz)
+      if (dist < minDist && dist > 0.0001) {
+        const overlap = (minDist - dist) * 0.5
+        const nx = dx / dist
+        const nz = dz / dist
+        a.position.x += nx * overlap
+        a.position.z += nz * overlap
+        b.position.x -= nx * overlap
+        b.position.z -= nz * overlap
+      }
+    }
+  }
 }

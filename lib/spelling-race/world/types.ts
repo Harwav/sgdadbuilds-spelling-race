@@ -6,6 +6,8 @@ export type AssetId =
   | 'kart' | 'gantry' | 'hdb-slab' | 'hdb-point' | 'shophouse-row'
   | 'hawker-centre' | 'rail-span' | 'rail-station' | 'rain-tree'
   | 'street-lamp' | 'hawker-table' | 'fixture-block'
+  | 'marina-bay-sands' | 'supertree' | 'singapore-flyer'
+  | 'car-sports-1' | 'car-sports-2' | 'car-sports-3' | 'car-sports-4' | 'car-sports-5'
 export type TextureAssetId = 'asphalt-diffuse' | 'asphalt-normal' | 'asphalt-roughness'
 export type WorldAssetId = AssetId | TextureAssetId
 

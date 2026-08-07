@@ -11,9 +11,12 @@ type RaceSetupProps = {
   assetStatus: 'loading' | 'ready' | 'error'
   assets: LoadedWorldAssets | null
   assetRecoveryDismissed: boolean
+  skippedWordCount: number
   onDifficultyChange(value: Difficulty): void
   onKartColourChange(value: KartColour): void
   onStart(): void
+  onRefit(): void
+  onChangeCar(): void
   onRetryAssets(): void
   onBackFromAssetError(): void
 }
@@ -38,9 +41,12 @@ export default function RaceSetup({
   assetStatus,
   assets,
   assetRecoveryDismissed,
+  skippedWordCount,
   onDifficultyChange,
   onKartColourChange,
   onStart,
+  onRefit,
+  onChangeCar,
   onRetryAssets,
   onBackFromAssetError,
 }: RaceSetupProps) {
@@ -122,7 +128,13 @@ export default function RaceSetup({
               <button type="button" onClick={onRetryAssets} className="mt-2 min-h-11 rounded-full border px-4 font-bold" style={{ borderColor: 'var(--brand-yellow)', color: 'var(--brand-yellow)' }}>Try again</button>
             </div>
           )}
-          <button type="button" onClick={onStart} disabled={!ready} className="mt-6 min-h-12 w-full rounded-full px-6 text-base font-bold disabled:cursor-not-allowed disabled:opacity-50" style={{ background: 'var(--brand-yellow)', color: 'var(--brand-navy)' }}>
+          <button type="button" onClick={onRefit} className="mt-4 min-h-12 w-full rounded-full border px-6 text-sm font-bold" style={{ borderColor: 'var(--brand-yellow)', color: 'var(--brand-yellow)' }}>
+            🔧 Refit{skippedWordCount > 0 ? ` (${skippedWordCount})` : ''}
+          </button>
+          <button type="button" onClick={onChangeCar} className="mt-3 min-h-12 w-full rounded-full border px-6 text-sm font-bold" style={{ borderColor: 'var(--line-strong)', color: 'var(--text-primary)' }}>
+            🚗 Change
+          </button>
+          <button type="button" onClick={onStart} disabled={!ready} className="mt-3 min-h-12 w-full rounded-full px-6 text-base font-bold disabled:cursor-not-allowed disabled:opacity-50" style={{ background: 'var(--brand-yellow)', color: 'var(--brand-navy)' }}>
             {assetStatus === 'loading' ? `Loading ${routeLabel}…` : 'Start engines'}
           </button>
         </fieldset>

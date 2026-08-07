@@ -15,28 +15,62 @@ describe('route cards', () => {
     expect(shippingRoutes().map((route) => route.id)).toEqual(['singapore-heartland'])
   })
 
-  it('locks the 18-landmark Singapore route shape and its authored zone anchors', () => {
+  it('locks the 52-landmark Singapore route shape and its authored zone anchors', () => {
     expect(SINGAPORE_HEARTLAND_ROUTE.landmarks.map(({ id, assetId, progress, elevation }) => [
       id, assetId, progress, elevation,
     ])).toEqual([
       ['hdb-east-slab', 'hdb-slab', 0.00, 0],
+      ['hdb-grid-1', 'hdb-point', 0.015, 0],
       ['hdb-east-point', 'hdb-point', 0.04, 0],
+      ['hdb-grid-2', 'hdb-point', 0.055, 0],
       ['hdb-east-lamp', 'street-lamp', 0.08, 0],
+      ['hdb-grid-3', 'hdb-point', 0.095, 0],
       ['hdb-central-slab', 'hdb-slab', 0.12, 0],
+      ['hdb-grid-4', 'hdb-point', 0.135, 0],
       ['hdb-central-point', 'hdb-point', 0.16, 0],
+      ['hdb-grid-5', 'hdb-point', 0.175, 0],
       ['hdb-west-slab', 'hdb-slab', 0.20, 0],
+      ['hdb-grid-6', 'hdb-point', 0.195, 0],
+      ['hdb-hawker-1', 'hdb-point', 0.23, 0],
+      ['hdb-hawker-2', 'hdb-point', 0.27, 0],
+      ['supertree-1', 'supertree', 0.285, 0],
+      ['supertree-2', 'supertree', 0.305, 0],
+      ['supertree-3', 'supertree', 0.325, 0],
+      ['supertree-4', 'supertree', 0.345, 0],
+      ['supertree-5', 'supertree', 0.365, 0],
+      ['hdb-hawker-3', 'hdb-point', 0.31, 0],
+      ['hdb-hawker-4', 'hdb-point', 0.335, 0],
       ['hawker-centre', 'hawker-centre', 0.355, 0],
       ['hawker-rain-tree', 'rain-tree', 0.37, 0],
       ['hawker-table-east', 'hawker-table', 0.347, 0],
       ['hawker-table-west', 'hawker-table', 0.37, 0],
+      ['hdb-hawker-5', 'hdb-point', 0.39, 0],
+      ['hdb-hawker-6', 'hdb-point', 0.43, 0],
+      ['hdb-hawker-7', 'hdb-point', 0.47, 0],
+      ['mbs-skyline', 'marina-bay-sands', 0.50, 0],
+      ['hdb-hawker-8', 'hdb-point', 0.51, 0],
+      ['hdb-hawker-9', 'hdb-point', 0.55, 0],
+      ['flyer-skyline', 'singapore-flyer', 0.58, 0],
+      ['hdb-hawker-10', 'hdb-point', 0.59, 0],
+      ['hdb-hawker-11', 'hdb-point', 0.63, 0],
       ['rail-span-start', 'rail-span', 0.68, 0],
+      ['hdb-rail-1', 'hdb-point', 0.695, 0],
+      ['hdb-rail-2', 'hdb-point', 0.725, 0],
       ['rail-station', 'rail-station', 0.80, 0],
       ['shophouse-row-east', 'shophouse-row', 0.76, 0],
       ['rail-span-middle', 'rail-span', 0.76, 0],
+      ['hdb-rail-3', 'hdb-point', 0.785, 0],
+      ['hdb-rail-4', 'hdb-point', 0.815, 0],
       ['shophouse-row-west', 'shophouse-row', 0.86, 0],
       ['rail-span-end', 'rail-span', 0.84, 0],
+      ['hdb-rail-5', 'hdb-point', 0.855, 0],
       ['skyline-slab-east', 'hdb-slab', 0.88, 0],
+      ['hdb-rail-6', 'hdb-point', 0.895, 0],
       ['skyline-slab-west', 'hdb-slab', 0.92, 0],
+      ['hdb-rail-7', 'hdb-point', 0.91, 0],
+      ['hdb-rail-8', 'hdb-point', 0.945, 0],
+      ['hdb-rail-9', 'hdb-point', 0.965, 0],
+      ['hdb-rail-10', 'hdb-point', 0.985, 0],
     ])
   })
 
@@ -105,7 +139,7 @@ describe('route cards', () => {
         ...SINGAPORE_HEARTLAND_ROUTE.landmarks,
         { ...SINGAPORE_HEARTLAND_ROUTE.landmarks[0] },
       ],
-    })).toContain('landmarks[18].id duplicates landmarks[0].id')
+    })).toContain('landmarks[52].id duplicates landmarks[0].id')
   })
 
   it('rejects landmark progress outside the circuit', () => {
@@ -115,7 +149,7 @@ describe('route cards', () => {
         ...SINGAPORE_HEARTLAND_ROUTE.landmarks,
         { ...SINGAPORE_HEARTLAND_ROUTE.landmarks[0], id: 'outside-circuit', progress: 1.1 },
       ],
-    })).toContain('landmarks[18].progress must be between 0 and 1')
+    })).toContain('landmarks[52].progress must be between 0 and 1')
   })
 
   it('rejects non-positive landmark scale', () => {
@@ -125,7 +159,7 @@ describe('route cards', () => {
         ...SINGAPORE_HEARTLAND_ROUTE.landmarks,
         { ...SINGAPORE_HEARTLAND_ROUTE.landmarks[0], id: 'flat-landmark', scale: 0 },
       ],
-    })).toContain('landmarks[18].scale must be greater than 0')
+    })).toContain('landmarks[52].scale must be greater than 0')
   })
 
   it('rejects landmarks whose asset is not listed for the route', () => {
@@ -135,7 +169,7 @@ describe('route cards', () => {
         ...SINGAPORE_HEARTLAND_ROUTE.landmarks,
         { ...SINGAPORE_HEARTLAND_ROUTE.landmarks[0], id: 'missing-asset', assetId: 'fixture-block' },
       ],
-    })).toContain('landmarks[18].assetId must be listed in requiredAssets or optionalAssets')
+    })).toContain('landmarks[52].assetId must be listed in requiredAssets or optionalAssets')
   })
 
   it('rejects assets listed as both required and optional', () => {
