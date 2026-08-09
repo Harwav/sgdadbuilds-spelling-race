@@ -16,8 +16,9 @@ export function createDistrictWorld(
   card: RouteCard,
   assets: LoadedWorldAssets,
   palette: GrandPrixPalette,
+  buildingModels?: readonly THREE.Group[],
 ): DistrictWorld {
-  if (card.district === 'singapore-heartland') return createSingaporeHeartlandDistrict(card, assets, palette)
+  if (card.district === 'singapore-heartland') return createSingaporeHeartlandDistrict(card, assets, palette, buildingModels)
   if (card.district === 'fixture') return createFixtureDistrict(card, assets)
   return assertNever(card.district)
 }

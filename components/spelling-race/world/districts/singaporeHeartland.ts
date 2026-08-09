@@ -15,15 +15,28 @@ type LandmarkRoot = {
   readonly root: THREE.Group
 }
 
+type FillerRoot = {
+  readonly detailTier: DetailTier
+  readonly root: THREE.Group
+}
+
+const FILLER_LAYOUT: Readonly<Record<DetailTier, { readonly perSide: number; readonly rows: number }>> = {
+  near: { perSide: 4, rows: 3 },
+  middle: { perSide: 3, rows: 2 },
+  distant: { perSide: 2, rows: 1 },
+}
+
 export function createSingaporeHeartlandDistrict(
   card: RouteCard,
   assets: LoadedWorldAssets,
   palette: GrandPrixPalette,
+  buildingModels?: readonly THREE.Group[],
 ): DistrictWorld {
   const root = new THREE.Group()
   root.name = 'district-singapore-heartland'
   const curve = createRouteCurve(card)
   const landmarks: LandmarkRoot[] = []
+  const fillers: FillerRoot[] = []
   const materials = new Set<THREE.Material>()
   const geometries = new Set<THREE.BufferGeometry>()
   const zones = createZones(root)
@@ -70,7 +83,7 @@ export function createSingaporeHeartlandDistrict(
       let model: THREE.Group
       const isBuilding = placement.assetId === 'hdb-slab' || placement.assetId === 'hdb-point'
       if (isBuilding) {
-        const cached = getCachedBuildingModels()
+        const cached = buildingModels ?? getCachedBuildingModels()
         const tier = placement.detailTier
         const seed = hashSeed(placement.id)
         let baseHeight: number
@@ -114,8 +127,7 @@ export function createSingaporeHeartlandDistrict(
 
         // ── 3× Monaco density: wall of colossal giants packed shoulder-to-shoulder ──
         if (cached && cached.length > 0) {
-          const perSide = tier === 'distant' ? 10 : tier === 'middle' ? 18 : 27
-          const rows = tier === 'distant' ? 1 : tier === 'middle' ? 2 : 3
+          const { perSide, rows } = FILLER_LAYOUT[tier]
           const gap = 0.001 // tight but not touching — buildings clearly separated
 
           for (let side = -1; side <= 1; side += 2) {
@@ -152,6 +164,7 @@ export function createSingaporeHeartlandDistrict(
                 fRoot.applyMatrix4(routeTransform(curve, fPlacement))
                 fRoot.add(fModel)
                 zones[zoneFor(THREE.MathUtils.clamp(fProgress, 0, 1))].add(fRoot)
+                fillers.push({ detailTier: tier, root: fRoot })
               }
             }
           }
@@ -186,6 +199,9 @@ export function createSingaporeHeartlandDistrict(
     root.userData.qualityTier = tier
     landmarks.forEach(({ placement, root: landmarkRoot }) => {
       landmarkRoot.visible = isLandmarkVisible(placement.detailTier, placement.required, tier)
+    })
+    fillers.forEach(({ detailTier, root: fillerRoot }) => {
+      fillerRoot.visible = isFillerVisible(detailTier, tier)
     })
   }
   setQuality('high')
@@ -379,6 +395,12 @@ function isLandmarkVisible(detail: DetailTier, required: boolean, tier: QualityT
   if (detail === 'distant') return false
   if (tier === 'balanced') return true
   return detail === 'near' || required
+}
+
+function isFillerVisible(detail: DetailTier, tier: QualityTier): boolean {
+  if (tier === 'high') return true
+  if (tier === 'balanced') return detail === 'near'
+  return false
 }
 
 /**

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import { createDistrictWorld } from '@/components/spelling-race/world/districts'
+import { createSingaporeHeartlandDistrict } from '@/components/spelling-race/world/districts/singaporeHeartland'
 import type { GrandPrixPalette } from '@/components/spelling-race/kartModel'
 import { createAssetCatalogue, type AssetBackend, type LoadedWorldAssets } from './assets'
 import { routeTransform } from './placement'
@@ -30,6 +31,23 @@ describe('district world registry', () => {
     expect(singapore.root.name).toBe('district-singapore-heartland')
     expect(fixture.root.name).toBe('district-fixture')
     expect(landmarkRoots(fixture.root).map((root) => root.userData.assetId)).toEqual(['fixture-block'])
+  })
+
+  it('caps GLB building fillers and hides them at low quality', () => {
+    const buildingModel = template('hdb-slab')
+    const world = createSingaporeHeartlandDistrict(
+      SINGAPORE_HEARTLAND_ROUTE,
+      assets(SINGAPORE_HEARTLAND_ROUTE),
+      palette(),
+      [buildingModel],
+    )
+    const fillers = world.root.children.flatMap((zone) => zone.children)
+      .filter((node) => node.name.startsWith('filler-'))
+
+    expect(fillers.length).toBeGreaterThan(0)
+    expect(fillers.length).toBeLessThanOrEqual(500)
+    world.setQuality('safe')
+    expect(fillers.every((filler) => !filler.visible)).toBe(true)
   })
 
   it('creates exactly the route-card landmarks and applies their route-relative transforms', () => {

@@ -52,6 +52,8 @@ export default function ChangeCarScreen({ onBack }: ChangeCarScreenProps) {
   }
 
   function cancelChallenge() {
+    recognitionTokenRef.current += 1
+    recognitionRef.current?.abort()
     carStore.cancelUnlock()
     setChallengeWords([])
     setWordIndex(0)

@@ -48,6 +48,7 @@ type ManifestModelEntry = {
   readonly id: AssetId
   readonly kind: 'model'
   readonly path: string
+  readonly loadable?: boolean
 }
 
 type ManifestTextureEntry = {
@@ -155,9 +156,11 @@ async function loadRouteAssets(card: RouteCard, backend: AssetBackend): Promise<
   const optionalIds = uniqueAssetIds(card.optionalAssets.filter((assetId) => !requiredIds.has(assetId)))
   const requiredEntries = [...requiredIds].map(modelEntry)
   const optionalEntries = [...optionalIds].map(modelEntry)
+  const loadableOptionalEntries = optionalEntries.filter((entry) => entry.loadable !== false)
+  const skippedOptional = optionalEntries.filter((entry) => entry.loadable === false).map((entry) => entry.id)
 
   const requiredModels = requiredEntries.map((entry) => safelyLoad(() => backend.loadModel(entry.path)))
-  const optionalModels = optionalEntries.map((entry) => safelyLoad(() => backend.loadModel(entry.path)))
+  const optionalModels = loadableOptionalEntries.map((entry) => safelyLoad(() => backend.loadModel(entry.path)))
   const textures = requiredTextureEntries.map((entry) => safelyLoad(() => backend.loadTexture(entry.path)))
   const [requiredResults, optionalResults, textureResults] = await Promise.all([
     Promise.allSettled(requiredModels),
@@ -180,9 +183,9 @@ async function loadRouteAssets(card: RouteCard, backend: AssetBackend): Promise<
     if (result.status === 'fulfilled') models.set(requiredEntries[index].id, result.value)
   })
 
-  const missingOptional: AssetId[] = []
+  const missingOptional: AssetId[] = [...skippedOptional]
   optionalResults.forEach((result, index) => {
-    const assetId = optionalEntries[index].id
+    const assetId = loadableOptionalEntries[index].id
     if (result.status === 'fulfilled') models.set(assetId, result.value)
     else missingOptional.push(assetId)
   })
