@@ -5,10 +5,37 @@ import {
   assistActiveWord,
   createWordDirector,
   showNextWord,
+  skipActiveWord,
   timeoutActiveWord,
 } from './wordDirector'
 
 describe('word director', () => {
+  it('permanently skips one active word without a boost', () => {
+    const active = showNextWord(createWordDirector(['cat', 'dog']), 0)
+    const skipped = skipActiveWord(active)
+
+    expect(skipped.boostRatio).toBe(0)
+    expect(skipped.state).toMatchObject({
+      activeWord: null,
+      activeSinceMs: null,
+      helpAvailable: false,
+      skippedWords: ['cat'],
+    })
+    expect(skipped.state.results.at(-1)).toEqual({ word: 'cat', outcome: 'skipped', elapsedMs: null })
+
+    const next = showNextWord(skipped.state, 1)
+    expect(next.activeWord).toBe('dog')
+  })
+
+  it('stops offering words after every bank word is skipped', () => {
+    let state = showNextWord(createWordDirector(['cat', 'dog']), 0)
+    state = skipActiveWord(state).state
+    state = showNextWord(state, 1)
+    state = skipActiveWord(state).state
+
+    expect(showNextWord(state, 2).activeWord).toBeNull()
+  })
+
   it('uses every deck word before continuing with a fresh deck', () => {
     const initial = createWordDirector(['cat', 'dog'])
     const first = showNextWord(initial, 0)

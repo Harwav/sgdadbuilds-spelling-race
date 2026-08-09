@@ -15,7 +15,7 @@ export type Difficulty = 'rookie' | 'racer' | 'champion'
 export type KartColour = 'red' | 'yellow' | 'teal' | 'purple'
 export type SteeringMode = 'tilt' | 'touch'
 export type RacePlacement = 1 | 2 | 3 | 4
-export type SightWordResult = { word: string; outcome: 'accepted' | 'timeout' | 'assisted'; elapsedMs: number | null }
+export type SightWordResult = { word: string; outcome: 'accepted' | 'timeout' | 'assisted' | 'skipped'; elapsedMs: number | null }
 export type RaceRecap = { placement: RacePlacement; fastestWords: string[]; practiceWords: string[] }
 
 export type VoiceGateState =

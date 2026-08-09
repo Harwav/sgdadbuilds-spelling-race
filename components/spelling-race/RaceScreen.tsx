@@ -20,6 +20,7 @@ import {
   assistActiveWord,
   createWordDirector,
   showNextWord,
+  skipActiveWord,
   timeoutActiveWord,
   WORD_WINDOW_MS,
   type WordDirectorState,
@@ -244,7 +245,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     restartAfterEndRef.current = handsFreeListeningRef.current
     audioRef.current?.duck(false)
     setMicrophone('ready')
-    recognitionRef.current?.stop()
+    if (recognitionOpenRef.current) recognitionRef.current?.stop()
   }, [])
 
   const handleCandidates = useCallback((candidates: readonly string[], isFinal = true): 'accepted' | 'retry' | null => {
@@ -431,7 +432,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     setStage('finished')
     const results = directorRef.current.results
     const practiceWords = results
-      .filter((result) => result.outcome === 'timeout' || result.outcome === 'assisted')
+      .filter((result) => result.outcome === 'timeout' || result.outcome === 'assisted' || result.outcome === 'skipped')
       .map((result) => result.word)
       .filter((word, index, words) => words.indexOf(word) === index)
     if (practiceWords.length > 0) refitStore.addSkippedWords(practiceWords)
@@ -627,6 +628,19 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     setFeedback('Pit stop complete. Keep racing!')
   }
 
+  function skipWord() {
+    const current = directorRef.current
+    if (stageRef.current !== 'racing' || frozenRef.current || current.activeWord === null) return
+
+    const skipped = skipActiveWord(current)
+    if (skipped.state === current) return
+
+    setSpeechReceipt(null)
+    endRecognitionTurn()
+    publishDirector(skipped.state)
+    setFeedback('Skipped — practise it after the race.')
+  }
+
   function setTouchSteering(value: number) {
     if (steeringMode === 'touch') steeringRef.current = value
   }
@@ -673,6 +687,24 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
           <div className="absolute inset-x-3 bottom-4 z-20 flex justify-center">
             <button type="button" onClick={assistWord} className="min-h-12 rounded-full border px-6 font-bold shadow-lg" style={{ background: 'var(--surface-2)', borderColor: 'var(--brand-yellow)', color: 'var(--brand-yellow)' }}>Help them through</button>
           </div>
+        )}
+
+        {stage === 'racing' && director.activeWord !== null && !frozen && (
+          <button
+            type="button"
+            data-testid="skip-word"
+            aria-label="Skip"
+            onClick={skipWord}
+            className="absolute top-1/2 z-20 min-h-16 min-w-24 -translate-y-1/2 rounded-full border px-5 text-lg font-bold shadow-lg"
+            style={{
+              right: 'max(1rem, env(safe-area-inset-right))',
+              background: 'var(--brand-yellow)',
+              borderColor: 'var(--grand-prix-gantry)',
+              color: 'var(--brand-navy)',
+            }}
+          >
+            Skip <span aria-hidden="true">→</span>
+          </button>
         )}
 
         {stage === 'racing' && steeringMode === 'touch' && !frozen && (

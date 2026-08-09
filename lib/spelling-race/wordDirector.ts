@@ -14,6 +14,7 @@ export type WordDirectorState = {
   shuffle: Shuffle
   remainingWords: readonly string[]
   retryWords: readonly RetryWord[]
+  skippedWords: readonly string[]
   activeWord: string | null
   activeSinceMs: number | null
   resolvedWordCount: number
@@ -31,6 +32,7 @@ export function createWordDirector(words: readonly string[], shuffle: Shuffle = 
     shuffle,
     remainingWords: [...bankWords],
     retryWords: [],
+    skippedWords: [],
     activeWord: null,
     activeSinceMs: null,
     resolvedWordCount: 0,
@@ -44,7 +46,11 @@ export function createWordDirector(words: readonly string[], shuffle: Shuffle = 
 export function showNextWord(state: WordDirectorState, nowMs: number): WordDirectorState {
   if (state.activeWord !== null) return state
 
-  const retryIndex = state.retryWords.findIndex((retry) => retry.availableAfterResolved <= state.resolvedWordCount)
+  const skippedWords = new Set(state.skippedWords)
+  const retryIndex = state.retryWords.findIndex((retry) => (
+    !skippedWords.has(retry.word)
+    && retry.availableAfterResolved <= state.resolvedWordCount
+  ))
   if (retryIndex >= 0) {
     const retry = state.retryWords[retryIndex]
     return {
@@ -55,10 +61,12 @@ export function showNextWord(state: WordDirectorState, nowMs: number): WordDirec
     }
   }
 
-  let [nextWord, ...remainingWords] = state.remainingWords
+  let [nextWord, ...remainingWords] = state.remainingWords.filter((word) => !skippedWords.has(word))
   if (nextWord === undefined) {
     const retryingWords = new Set(state.retryWords.map((retry) => retry.word))
-    const freshDeck = [...state.shuffle(state.bankWords.filter((word) => !retryingWords.has(word)))]
+    const freshDeck = [...state.shuffle(state.bankWords.filter((word) => (
+      !skippedWords.has(word) && !retryingWords.has(word)
+    )))]
     if (freshDeck.length > 1 && freshDeck[0] === state.lastResolvedWord) freshDeck.push(freshDeck.shift()!)
     ;[nextWord, ...remainingWords] = freshDeck
   }
@@ -110,6 +118,27 @@ export function timeoutActiveWord(state: WordDirectorState, nowMs: number): Word
 export function assistActiveWord(state: WordDirectorState): WordDirectorState {
   if (state.activeWord === null || !state.helpAvailable) return state
   return resolveActiveWord(state, 'assisted', null)
+}
+
+export function skipActiveWord(state: WordDirectorState): { state: WordDirectorState; boostRatio: 0 } {
+  if (state.activeWord === null) return { state, boostRatio: 0 }
+
+  const word = state.activeWord
+  return {
+    boostRatio: 0,
+    state: {
+      ...state,
+      remainingWords: state.remainingWords.filter((candidate) => candidate !== word),
+      retryWords: state.retryWords.filter((retry) => retry.word !== word),
+      skippedWords: state.skippedWords.includes(word) ? state.skippedWords : [...state.skippedWords, word],
+      activeWord: null,
+      activeSinceMs: null,
+      resolvedWordCount: state.resolvedWordCount + 1,
+      lastResolvedWord: word,
+      helpAvailable: false,
+      results: [...state.results, { word, outcome: 'skipped', elapsedMs: null }],
+    },
+  }
 }
 
 function resolveActiveWord(
