@@ -137,6 +137,17 @@ describe('world asset catalogue', () => {
     expect(bundle.missingOptional).toEqual(['street-lamp'])
   })
 
+  it('does not request procedural-only optional landmark models', async () => {
+    const fixture = backend()
+    const catalogue = createAssetCatalogue(fixture.assetBackend)
+
+    const bundle = await catalogue.acquire(route({ optionalAssets: ['supertree'] }))
+
+    expect(fixture.loadedModels).toEqual(['/spelling-race/assets/models/fixture-block.glb'])
+    expect(bundle.models.has('supertree')).toBe(false)
+    expect(bundle.missingOptional).toEqual(['supertree'])
+  })
+
   it('starts a fresh request only when retrying a failed route', async () => {
     let attempts = 0
     const fixture = backend({
