@@ -1,6 +1,7 @@
 import type { VoiceGateState } from './types'
 
 export const SPEECH_LANGUAGE = 'en-SG'
+export const SPEECH_MIN_CONFIDENCE = 0.8
 
 export type VoiceEnvironment = {
   secureContext: boolean
@@ -96,7 +97,12 @@ export function createRecognitionPort(
         const result = event.results[event.resultIndex ?? 0]
         if (!result) return
         onResult(
-          Array.from({ length: result.length }, (_, index) => result[index]?.transcript).filter(Boolean),
+          Array.from({ length: result.length }, (_, index) => result[index]?.transcript)
+            .filter((transcript, index) => {
+              if (!transcript) return false
+              const confidence = result[index]?.confidence ?? 0
+              return confidence >= SPEECH_MIN_CONFIDENCE
+            }),
           result.isFinal,
           event.resultIndex ?? 0,
         )
