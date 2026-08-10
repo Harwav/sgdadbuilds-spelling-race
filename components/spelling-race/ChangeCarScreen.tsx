@@ -86,7 +86,7 @@ export default function ChangeCarScreen({ onBack }: ChangeCarScreenProps) {
       (candidates, isFinal) => {
         if (token !== recognitionTokenRef.current || handledRef.current) return
 
-        const result = evaluateSightWordAnswer(currentWord, candidates, isFinal)
+        const result = evaluateSightWordAnswer(currentWord, candidates.map(({ transcript }) => transcript), isFinal)
         if (!result) return
 
         handledRef.current = true

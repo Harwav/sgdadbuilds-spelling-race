@@ -72,6 +72,18 @@ describe('evaluateSightWordAnswer', () => {
     })
   })
 
+  it('accepts only configured short-word speech confusions', () => {
+    expect(evaluateSightWordAnswer('an', ['and'])).toEqual({
+      outcome: 'accepted', match: 'phonetic', detected: 'and',
+    })
+    expect(evaluateSightWordAnswer('am', ['and'])).toEqual({
+      outcome: 'retry', reason: 'different-word', detected: 'and',
+    })
+    expect(evaluateSightWordAnswer('an', ['and', 'an'])).toEqual({
+      outcome: 'accepted', match: 'exact', detected: 'an',
+    })
+  })
+
   it('rejects different words and never applies fallback to four-character targets', () => {
     expect(evaluateSightWordAnswer('tree', ['train'])).toEqual({
       outcome: 'retry', reason: 'different-word', detected: 'train',

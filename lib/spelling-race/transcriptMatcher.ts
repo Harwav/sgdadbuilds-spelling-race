@@ -4,6 +4,9 @@ import { isStrongPhoneticVariant } from './phoneticMatcher'
 
 const homophoneCandidates: Readonly<Record<string, readonly string[]>> = HOMOPHONE_CANDIDATES
 const pronunciationSignatures: Readonly<Record<string, readonly string[]>> = BUILT_IN_PRONUNCIATION_SIGNATURES
+const SHORT_WORD_CONFUSIONS: Readonly<Record<string, readonly string[]>> = {
+  an: ['and'],
+}
 
 const LETTER_NAMES: Record<string, string> = {
   a: 'a', ay: 'a',
@@ -65,6 +68,12 @@ export function evaluateSightWordAnswer(
 
   for (const candidate of normalisedCandidates) {
     if (homophoneCandidates[expected]?.includes(candidate)) {
+      return { outcome: 'accepted', match: 'phonetic', detected: candidate }
+    }
+  }
+
+  for (const candidate of normalisedCandidates) {
+    if (SHORT_WORD_CONFUSIONS[expected]?.includes(candidate)) {
       return { outcome: 'accepted', match: 'phonetic', detected: candidate }
     }
   }

@@ -344,7 +344,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
           return
         }
         recordVoiceTrace(`result: token=${token} final=${isFinal}`)
-        const outcome = handleCandidates(candidates, isFinal)
+        const outcome = handleCandidates(candidates.map(({ transcript }) => transcript), isFinal)
         voiceDiagnostics.record('result', token, { final: isFinal, actionable: outcome !== null })
         if (!outcome) return
         if (outcome === 'accepted') handledVoiceSegmentsRef.current.add(segmentId)

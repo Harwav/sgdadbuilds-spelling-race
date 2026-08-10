@@ -72,7 +72,7 @@ export default function RefitScreen({ onBack }: RefitScreenProps) {
       (candidates, isFinal) => {
         if (token !== recognitionTokenRef.current || handledRef.current) return
 
-        const result = evaluateSightWordAnswer(word, candidates, isFinal)
+        const result = evaluateSightWordAnswer(word, candidates.map(({ transcript }) => transcript), isFinal)
         if (!result) return
 
         handledRef.current = true

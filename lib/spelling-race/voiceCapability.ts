@@ -1,7 +1,11 @@
 import type { VoiceGateState } from './types'
 
 export const SPEECH_LANGUAGE = 'en-SG'
-export const SPEECH_MIN_CONFIDENCE = 0.8
+
+export type RecognitionCandidate = {
+  transcript: string
+  confidence: number | null
+}
 
 export type VoiceEnvironment = {
   secureContext: boolean
@@ -11,7 +15,7 @@ export type VoiceEnvironment = {
 
 export type RecognitionPort = {
   start: (
-    onResult: (candidates: readonly string[], isFinal: boolean, segmentId: number) => void,
+    onResult: (candidates: readonly RecognitionCandidate[], isFinal: boolean, segmentId: number) => void,
     onError: (code: string) => void,
     onEnd: () => void,
     onStart?: () => void,
@@ -68,7 +72,11 @@ export function createRecognitionPort(
       start: (onResult, onError, onEnd, onStart) => {
         onStart?.()
         browser.__spellingRaceVoice?.start(
-          (value) => onResult(typeof value === 'string' ? [value] : value, true, 0),
+          (value) => onResult(
+            (typeof value === 'string' ? [value] : value).map((transcript) => ({ transcript, confidence: null })),
+            true,
+            0,
+          ),
           onError,
           onEnd,
         )
@@ -97,12 +105,9 @@ export function createRecognitionPort(
         const result = event.results[event.resultIndex ?? 0]
         if (!result) return
         onResult(
-          Array.from({ length: result.length }, (_, index) => result[index]?.transcript)
-            .filter((transcript, index) => {
-              if (!transcript) return false
-              const confidence = result[index]?.confidence ?? 0
-              return confidence >= SPEECH_MIN_CONFIDENCE
-            }),
+          Array.from({ length: result.length }, (_, index) => result[index])
+            .filter((alternative): alternative is SpeechRecognitionAlternative => Boolean(alternative?.transcript))
+            .map((alternative) => ({ transcript: alternative.transcript, confidence: alternative.confidence ?? null })),
           result.isFinal,
           event.resultIndex ?? 0,
         )

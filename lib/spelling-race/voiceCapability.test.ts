@@ -3,7 +3,6 @@ import {
   createRecognitionPort,
   inspectVoiceEnvironment,
   SPEECH_LANGUAGE,
-  SPEECH_MIN_CONFIDENCE,
   voiceGateForError,
 } from './voiceCapability'
 
@@ -70,7 +69,7 @@ describe('createRecognitionPort', () => {
     } as never)
 
     expect(instances[0].interimResults).toBe(true)
-    expect(received).toEqual([[['cat'], false, 0]])
+    expect(received).toEqual([[[{ transcript: 'cat', confidence: 0.9 }], false, 0]])
   })
 
   it('returns every alternative from the first final en-SG result', () => {
@@ -83,7 +82,7 @@ describe('createRecognitionPort', () => {
     }
 
     const port = createRecognitionPort({ SpeechRecognition: StandardRecognition })
-    const received: string[][] = []
+    const received: unknown[][] = []
     const errors: string[] = []
     let ended = 0
 
@@ -108,7 +107,10 @@ describe('createRecognitionPort', () => {
     instances[0].onerror?.({ error: 'network' } as never)
     instances[0].onend?.()
 
-    expect(received).toEqual([['brite', 'bright']])
+    expect(received).toEqual([[
+      { transcript: 'brite', confidence: 0.85 },
+      { transcript: 'bright', confidence: 0.92 },
+    ]])
     expect(errors).toEqual(['network'])
     expect(ended).toBe(1)
   })
@@ -121,7 +123,7 @@ describe('createRecognitionPort', () => {
         instances.push(this)
       }
     }
-    const received: string[][] = []
+    const received: unknown[][] = []
     const port = createRecognitionPort({ SpeechRecognition: StandardRecognition })
 
     port?.start((candidates) => received.push([...candidates]), () => undefined, () => undefined)
@@ -137,7 +139,12 @@ describe('createRecognitionPort', () => {
       ],
     } as never)
 
-    expect(received).toEqual([['go'], ['cat', 'kat']])
+    expect(received).toEqual([[
+      { transcript: 'go', confidence: 0.9 },
+    ], [
+      { transcript: 'cat', confidence: 0.88 },
+      { transcript: 'kat', confidence: 0.81 },
+    ]])
   })
 
   it('falls back to the webkit constructor and returns null when absent', () => {
@@ -236,7 +243,7 @@ describe('createRecognitionPort', () => {
     expect('continuous' in instances[0]).toBe(false)
   })
 
-  it('filters out candidates below SPEECH_MIN_CONFIDENCE (0.8)', () => {
+  it('preserves every non-empty alternative with its native confidence', () => {
     const instances: FakeRecognition[] = []
     class StandardRecognition extends FakeRecognition {
       constructor() {
@@ -244,7 +251,7 @@ describe('createRecognitionPort', () => {
         instances.push(this)
       }
     }
-    const received: string[][] = []
+    const received: unknown[][] = []
     const port = createRecognitionPort({ SpeechRecognition: StandardRecognition })
 
     port?.start((candidates) => received.push([...candidates]), () => undefined, () => undefined)
@@ -252,16 +259,19 @@ describe('createRecognitionPort', () => {
       results: [{
         isFinal: true,
         length: 4,
-        0: { transcript: 'cat', confidence: 0.95 },
-        1: { transcript: 'kat', confidence: 0.72 },
-        2: { transcript: 'bat', confidence: 0.80 },
-        3: { transcript: 'cap' },
+        0: { transcript: 'five', confidence: 0.95 },
+        1: { transcript: 'fife', confidence: 0.42 },
+        2: { transcript: 'and', confidence: 0 },
+        3: { transcript: 'an' },
       }],
     } as never)
 
-    // 'kat' (0.72) is below 0.8 and 'cap' (no confidence → 0) are filtered out
-    expect(received).toEqual([['cat', 'bat']])
-    expect(SPEECH_MIN_CONFIDENCE).toBe(0.8)
+    expect(received).toEqual([[
+      { transcript: 'five', confidence: 0.95 },
+      { transcript: 'fife', confidence: 0.42 },
+      { transcript: 'and', confidence: 0 },
+      { transcript: 'an', confidence: null },
+    ]])
   })
 })
 

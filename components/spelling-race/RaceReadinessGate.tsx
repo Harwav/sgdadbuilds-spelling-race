@@ -66,7 +66,7 @@ export default function RaceReadinessGate({ onReady, onBack }: RaceReadinessGate
       recognitionRef.current = port
       port.start(
         (candidates, isFinal) => {
-          const result = evaluateSightWordAnswer('go', candidates, isFinal)
+          const result = evaluateSightWordAnswer('go', candidates.map(({ transcript }) => transcript), isFinal)
           if (!result) return
           if (result.outcome === 'accepted') {
             setVoiceReady(true)
