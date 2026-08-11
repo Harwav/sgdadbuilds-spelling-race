@@ -61,6 +61,12 @@ describe('evaluateSightWordAnswer', () => {
     expect(evaluateSightWordAnswer('bright', ['I can read brite'], true, 'carrier')).toEqual({
       outcome: 'accepted', match: 'phonetic', detected: 'brite',
     })
+    expect(evaluateSightWordAnswer('bright', ['bright'], true, 'carrier')).toEqual({
+      outcome: 'accepted', match: 'exact', detected: 'bright',
+    })
+    expect(evaluateSightWordAnswer('bright', ['brite'], true, 'carrier')).toEqual({
+      outcome: 'accepted', match: 'phonetic', detected: 'brite',
+    })
   })
 
   it('does not let carrier words count as the expected word', () => {
@@ -68,6 +74,9 @@ describe('evaluateSightWordAnswer', () => {
       outcome: 'retry', reason: 'different-word', detected: 'cat',
     })
     expect(evaluateSightWordAnswer('read', ['I can read'], true, 'carrier')).toEqual({
+      outcome: 'retry', reason: 'different-word', detected: null,
+    })
+    expect(evaluateSightWordAnswer('read', ['read'], true, 'carrier')).toEqual({
       outcome: 'retry', reason: 'different-word', detected: null,
     })
   })

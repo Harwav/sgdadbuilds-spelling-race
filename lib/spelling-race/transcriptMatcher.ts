@@ -56,11 +56,14 @@ export type SightWordMatch =
 
 export type SightWordAttemptMode = 'isolated' | 'carrier'
 
-function evidenceCandidates(values: readonly string[], mode: SightWordAttemptMode): string[] {
+const CARRIER_WORDS = new Set(['i', 'can', 'read'])
+
+function evidenceCandidates(values: readonly string[], mode: SightWordAttemptMode, expected: string): string[] {
   const normalised = values.map(normaliseTranscript).filter(Boolean)
   if (mode === 'isolated') return normalised
   return normalised.flatMap((candidate) => {
     const tokens = candidate.split(' ')
+    if (tokens.length === 1) return CARRIER_WORDS.has(expected) ? [] : tokens
     const hasCarrierPrefix = tokens[0] === 'i' && tokens[1] === 'can' && tokens[2] === 'read'
     if (!hasCarrierPrefix || tokens.length < 4) return []
     return [tokens.at(-1)!]
@@ -74,7 +77,7 @@ export function evaluateSightWordAnswer(
   attemptMode: SightWordAttemptMode = 'isolated',
 ): SightWordMatch | null {
   const expected = normaliseTranscript(target)
-  const normalisedCandidates = evidenceCandidates(candidates, attemptMode)
+  const normalisedCandidates = evidenceCandidates(candidates, attemptMode, expected)
 
   const exact = normalisedCandidates.find((candidate) => candidate === expected)
   if (exact) return { outcome: 'accepted', match: 'exact', detected: exact }
