@@ -72,7 +72,7 @@ export function createBrowserRetryPromptPort(): RetryPromptPort {
     return createRetryPromptPort(null)
   }
   return createRetryPromptPort({
-    makeUtterance: (text) => new SpeechSynthesisUtterance(text),
+    makeUtterance: (text) => new SpeechSynthesisUtterance(text) as unknown as RetryPromptUtterance,
     speak: (utterance) => window.speechSynthesis.speak(utterance as SpeechSynthesisUtterance),
     cancel: () => window.speechSynthesis.cancel(),
   })

@@ -6,12 +6,14 @@ import { track } from '@/lib/analytics'
 import { createRaceAudio, type RaceAudio } from '@/lib/spelling-race/raceAudio'
 import { applyBoost, createRace, stepRace, TRACK_LENGTH, type RaceState } from '@/lib/spelling-race/raceSimulation'
 import { refitStore } from '@/lib/spelling-race/refitStore'
+import { createBrowserRetryPromptPort, type RetryPromptPort } from '@/lib/spelling-race/retryVoicePrompt'
 import { createTiltPort, type TiltPort } from '@/lib/spelling-race/tiltController'
-import { evaluateSightWordAnswer } from '@/lib/spelling-race/transcriptMatcher'
+import { evaluateSightWordAnswer, type SightWordAttemptMode } from '@/lib/spelling-race/transcriptMatcher'
 import type { CarId } from '@/lib/spelling-race/carStore'
 import type { Difficulty, KartColour, RaceRecap, SteeringMode } from '@/lib/spelling-race/types'
 import { createRecognitionPort, voiceGateForError, type RecognitionPort } from '@/lib/spelling-race/voiceCapability'
 import { createVoiceDiagnosticRecorder } from '@/lib/spelling-race/voiceDiagnostics'
+import { decideVoiceError, decideVoiceEvidence, type VoiceTurnDecision } from '@/lib/spelling-race/voiceTurnPolicy'
 import { bankForDifficulty } from '@/lib/spelling-race/wordBanks'
 import { isCompleteWorldAssetBundle, type LoadedWorldAssets } from '@/lib/spelling-race/world/assets'
 import type { RouteCard } from '@/lib/spelling-race/world/types'
@@ -19,6 +21,7 @@ import {
   acceptActiveWord,
   assistActiveWord,
   createWordDirector,
+  deferActiveWord,
   showNextWord,
   skipActiveWord,
   timeoutActiveWord,
@@ -49,10 +52,10 @@ type RaceStage = 'grid' | 'countdown' | 'racing' | 'finished'
 type MicrophoneState = 'ready' | 'listening' | 'interrupted'
 type RecognitionCloseReason = 'word-resolved' | 'stopped' | 'error'
 type SpeechReceipt =
-  | { kind: 'exact'; detected: string }
-  | { kind: 'phonetic'; detected: string; target: string }
-  | { kind: 'retry'; detected: string; target: string }
+  | { kind: 'exact' }
+  | { kind: 'phonetic' }
   | null
+type PendingVoiceAction = Extract<VoiceTurnDecision, { kind: 'prompt-retry' | 'defer' }> & { word: string }
 
 const FIXED_STEP_SECONDS = 1 / 60
 const DEFAULT_SEED = 2_026_073
@@ -104,6 +107,12 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
   const recognitionCloseReasonRef = useRef<RecognitionCloseReason | null>(null)
   const restartAfterEndRef = useRef(false)
   const handledVoiceSegmentsRef = useRef(new Set<number>())
+  const voiceAttemptModeRef = useRef<SightWordAttemptMode>('isolated')
+  const voiceAttemptWordRef = useRef<string | null>(null)
+  const pendingVoiceActionRef = useRef<PendingVoiceAction | null>(null)
+  const retryPromptRef = useRef<RetryPromptPort | null>(null)
+  const retryPromptGenerationRef = useRef(0)
+  if (retryPromptRef.current === null) retryPromptRef.current = createBrowserRetryPromptPort()
 
   const reducedMotion = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -143,6 +152,8 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
       if (celebrationTimerRef.current !== null) window.clearTimeout(celebrationTimerRef.current)
       recognitionTokenRef.current += 1
       wordArmedRef.current = false
+      retryPromptGenerationRef.current += 1
+      retryPromptRef.current?.cancel()
       recognitionRef.current?.abort()
       recognitionRef.current = null
       audioRef.current?.destroy()
@@ -216,9 +227,22 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     setWordTurboRatio(next.activeWord === null || next.helpAvailable ? 0 : 1)
   }, [])
 
+  const cancelRetryPrompt = useCallback(() => {
+    retryPromptGenerationRef.current += 1
+    retryPromptRef.current?.cancel()
+  }, [])
+
+  const resetVoiceAttempt = useCallback(() => {
+    voiceAttemptWordRef.current = null
+    voiceAttemptModeRef.current = 'isolated'
+    pendingVoiceActionRef.current = null
+    cancelRetryPrompt()
+  }, [cancelRetryPrompt])
+
   const stopRecognition = useCallback((nextMicrophone: MicrophoneState = 'ready') => {
     wordArmedRef.current = false
     restartAfterEndRef.current = false
+    resetVoiceAttempt()
     setSpeechReceipt(null)
     if (recognitionOpenRef.current && recognitionCloseReasonRef.current !== 'stopped') {
       recognitionCloseReasonRef.current = 'stopped'
@@ -226,47 +250,44 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     }
     audioRef.current?.duck(false)
     setMicrophone(nextMicrophone)
-  }, [])
+  }, [resetVoiceAttempt])
 
   const interruptSpeech = useCallback((code: string) => {
     wordArmedRef.current = false
     restartAfterEndRef.current = false
+    resetVoiceAttempt()
     setSpeechReceipt(null)
     audioRef.current?.duck(true)
     audioRef.current?.pause()
     const status = voiceGateForError(code)
     setMicrophone('interrupted')
     setSpeechIssue(status.message)
-  }, [])
+  }, [resetVoiceAttempt])
 
   const endRecognitionTurn = useCallback(() => {
     wordArmedRef.current = false
+    resetVoiceAttempt()
     recognitionCloseReasonRef.current = 'word-resolved'
     restartAfterEndRef.current = handsFreeListeningRef.current
     audioRef.current?.duck(false)
     setMicrophone('ready')
     if (recognitionOpenRef.current) recognitionRef.current?.stop()
-  }, [])
+  }, [resetVoiceAttempt])
 
-  const handleCandidates = useCallback((candidates: readonly string[], isFinal = true): 'accepted' | 'retry' | null => {
+  const handleCandidates = useCallback((candidates: readonly string[], isFinal = true): 'accepted' | 'unresolved' | null => {
     const current = directorRef.current
     if (!current.activeWord) return null
-    const result = evaluateSightWordAnswer(current.activeWord, candidates, isFinal)
+    const result = evaluateSightWordAnswer(current.activeWord, candidates, isFinal, voiceAttemptModeRef.current)
     if (!result) return null
     wordArmedRef.current = false
     audioRef.current?.duck(false)
     setMicrophone('ready')
-    setSpeechReceipt(result.detected === null
-      ? null
-      : result.outcome === 'accepted'
-        ? result.match === 'exact'
-          ? { kind: 'exact', detected: result.detected }
-          : { kind: 'phonetic', detected: result.detected, target: current.activeWord }
-        : { kind: 'retry', detected: result.detected, target: current.activeWord })
 
     if (result.outcome === 'accepted') {
+      setSpeechReceipt(result.match === 'exact' ? { kind: 'exact' } : { kind: 'phonetic' })
       const accepted = acceptActiveWord(current, wordClockMsRef.current)
       publishDirector(accepted.state)
+      resetVoiceAttempt()
       raceRef.current = applyBoost(raceRef.current, accepted.boostRatio)
       setRace(raceRef.current)
       audioRef.current?.boost(accepted.boostRatio)
@@ -277,10 +298,9 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
       return 'accepted'
     }
 
-    setFeedback('Try the same word again before the turbo runs out.')
-    setListenAttempt((value) => value + 1)
-    return 'retry'
-  }, [publishDirector])
+    setSpeechReceipt(null)
+    return 'unresolved'
+  }, [publishDirector, resetVoiceAttempt])
 
   const startRecognition = useCallback((fromChildGesture = false) => {
     const activeWord = directorRef.current.activeWord
@@ -288,6 +308,12 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     if (!activeWord || directorRef.current.helpAvailable || frozenRef.current || stageRef.current !== 'racing') {
       recordVoiceTrace('tap/start: blocked by race guard')
       return
+    }
+    if (voiceAttemptWordRef.current !== activeWord) {
+      cancelRetryPrompt()
+      pendingVoiceActionRef.current = null
+      voiceAttemptWordRef.current = activeWord
+      voiceAttemptModeRef.current = 'isolated'
     }
     if (fromChildGesture) {
       handsFreeListeningRef.current = true
@@ -343,15 +369,20 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
           voiceDiagnostics.record('result', token, { final: isFinal, actionable: false })
           return
         }
-        recordVoiceTrace(`result: token=${token} final=${isFinal}`)
-        const outcome = handleCandidates(candidates.map(({ transcript }) => transcript), isFinal)
+        const transcripts = candidates.map(({ transcript }) => transcript)
+        recordVoiceTrace(`result: token=${token} final=${isFinal}${voiceDebug ? ` candidates=${transcripts.join('|')}` : ''}`)
+        const outcome = handleCandidates(transcripts, isFinal)
         voiceDiagnostics.record('result', token, { final: isFinal, actionable: outcome !== null })
         if (!outcome) return
-        if (outcome === 'accepted') handledVoiceSegmentsRef.current.add(segmentId)
+        const decision = decideVoiceEvidence(voiceAttemptModeRef.current, outcome)
+        if (decision.kind === 'accept') handledVoiceSegmentsRef.current.add(segmentId)
         handled = true
         recognitionCloseReasonRef.current = 'word-resolved'
-        restartAfterEndRef.current = handsFreeListeningRef.current
-        if (outcome === 'accepted' && !isFinal) port.stop()
+        restartAfterEndRef.current = decision.kind === 'accept' && handsFreeListeningRef.current
+        if (decision.kind === 'prompt-retry' || decision.kind === 'defer') {
+          pendingVoiceActionRef.current = { ...decision, word: activeWord }
+        }
+        if (decision.kind === 'accept' && !isFinal) port.stop()
       },
       (code) => {
         if (token !== recognitionTokenRef.current) {
@@ -371,19 +402,61 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
         recordVoiceTrace(`error: ${code} token=${token}`)
         voiceDiagnostics.record('error', token, { error: code })
         handled = true
-        recognitionCloseReasonRef.current = 'error'
-        interruptSpeech(code)
+        const decision = decideVoiceError(voiceAttemptModeRef.current, code)
+        if (decision.kind === 'block') {
+          recognitionCloseReasonRef.current = 'error'
+          interruptSpeech(decision.code)
+          return
+        }
+        recognitionCloseReasonRef.current = 'word-resolved'
+        restartAfterEndRef.current = false
+        wordArmedRef.current = false
+        audioRef.current?.duck(false)
+        setMicrophone('ready')
+        pendingVoiceActionRef.current = { ...decision, word: activeWord }
       },
       () => {
         if (token !== recognitionTokenRef.current) return
         const closeReason = recognitionCloseReasonRef.current
-        const willRestart = restartAfterEndRef.current && handsFreeListeningRef.current
+        if (!handled && closeReason === null && directorRef.current.activeWord === activeWord) {
+          const decision = decideVoiceError(voiceAttemptModeRef.current, 'no-speech')
+          if (decision.kind === 'prompt-retry' || decision.kind === 'defer') {
+            pendingVoiceActionRef.current = { ...decision, word: activeWord }
+          }
+        }
+        const pendingAction = pendingVoiceActionRef.current
+        const willRestart = pendingAction === null && restartAfterEndRef.current && handsFreeListeningRef.current
         recordVoiceTrace(`end: token=${token} restart=${willRestart}`)
         wordArmedRef.current = false
         recognitionOpenRef.current = false
         recognitionCloseReasonRef.current = null
         voiceDiagnostics.record('ended', token, { restart: willRestart })
-        if (!handled && closeReason === null) interruptSpeech('no-speech')
+        if (pendingAction?.kind === 'prompt-retry') {
+          setFeedback('That was hard to hear. Listen, then try once more.')
+          const promptGeneration = retryPromptGenerationRef.current + 1
+          retryPromptGenerationRef.current = promptGeneration
+          retryPromptRef.current?.play(pendingAction.word, () => {
+            if (
+              promptGeneration !== retryPromptGenerationRef.current
+              || pendingVoiceActionRef.current !== pendingAction
+              || directorRef.current.activeWord !== pendingAction.word
+              || frozenRef.current
+              || !handsFreeListeningRef.current
+            ) return
+            pendingVoiceActionRef.current = null
+            voiceAttemptModeRef.current = 'carrier'
+            setListenAttempt((value) => value + 1)
+          })
+          return
+        }
+        if (pendingAction?.kind === 'defer') {
+          const current = directorRef.current
+          if (current.activeWord === pendingAction.word) publishDirector(deferActiveWord(current))
+          resetVoiceAttempt()
+          setSpeechReceipt(null)
+          setFeedback("Let's bring that word back later. Keep racing!")
+          return
+        }
         if (willRestart) {
           restartAfterEndRef.current = false
           voiceDiagnostics.record('restart', token)
@@ -407,7 +480,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
         audioRef.current?.duck(true)
       },
     )
-  }, [handleCandidates, interruptSpeech, recordVoiceTrace, voiceDiagnostics])
+  }, [cancelRetryPrompt, handleCandidates, interruptSpeech, publishDirector, recordVoiceTrace, resetVoiceAttempt, voiceDebug, voiceDiagnostics])
 
   const handleTimeout = useCallback(() => {
     const current = directorRef.current
@@ -432,7 +505,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     setStage('finished')
     const results = directorRef.current.results
     const practiceWords = results
-      .filter((result) => result.outcome === 'timeout' || result.outcome === 'assisted' || result.outcome === 'skipped')
+      .filter((result) => result.outcome === 'timeout' || result.outcome === 'assisted' || result.outcome === 'skipped' || result.outcome === 'deferred')
       .map((result) => result.word)
       .filter((word, index, words) => words.indexOf(word) === index)
     if (practiceWords.length > 0) refitStore.addSkippedWords(practiceWords)
@@ -534,7 +607,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
       return () => window.clearTimeout(timeout)
     }
 
-    if (handsFreeListeningRef.current && !recognitionOpenRef.current && !wordArmedRef.current && microphone !== 'listening') {
+    if (handsFreeListeningRef.current && pendingVoiceActionRef.current === null && !recognitionOpenRef.current && !wordArmedRef.current && microphone !== 'listening') {
       const frame = window.requestAnimationFrame(() => startRecognition())
       return () => window.cancelAnimationFrame(frame)
     }
@@ -572,6 +645,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
     wordArmedRef.current = false
     handsFreeListeningRef.current = false
     setHandsFreeListening(false)
+    resetVoiceAttempt()
     recognitionOpenRef.current = false
     recognitionCloseReasonRef.current = null
     restartAfterEndRef.current = false
@@ -742,15 +816,14 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
         </aside>
       )}
 
-      <p aria-live="polite" className="mt-3 min-h-6 text-center text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{speechReceipt?.kind === 'retry' ? speechReceiptText(speechReceipt) : feedback}</p>
+      <p aria-live="polite" className="mt-3 min-h-6 text-center text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{feedback}</p>
     </section>
   )
 }
 
 function speechReceiptText(receipt: Exclude<SpeechReceipt, null>): string {
-  if (receipt.kind === 'exact') return `I heard “${receipt.detected}”. Turbo!`
-  if (receipt.kind === 'phonetic') return `I heard “${receipt.detected}”. That sounds like “${receipt.target}”. Turbo!`
-  return `I heard “${receipt.detected}”. We’re looking for “${receipt.target}”. This one will come back.`
+  if (receipt.kind === 'exact') return 'Turbo!'
+  return 'That works. Turbo!'
 }
 
 function Overlay({ title, detail, children }: { title: string; detail?: string; children?: React.ReactNode }) {

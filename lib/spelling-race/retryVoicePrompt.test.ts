@@ -6,18 +6,19 @@ afterEach(() => vi.useRealTimers())
 describe('retry voice prompt', () => {
   it('speaks the word and carrier phrase, then completes once', () => {
     const done = vi.fn()
-    let utterance: RetryPromptUtterance | null = null
+    const utterances: RetryPromptUtterance[] = []
     const port = createRetryPromptPort({
       makeUtterance: (text) => ({ text, lang: '', rate: 1, onend: null, onerror: null }),
-      speak: (value) => { utterance = value },
+      speak: (value) => { utterances.push(value) },
       cancel: vi.fn(),
     })
 
     port.play('bright', done)
-    expect(utterance?.text).toBe('bright. I can read bright.')
-    expect(utterance?.lang).toBe('en-SG')
-    utterance?.onend?.()
-    utterance?.onerror?.()
+    const utterance = utterances[0]
+    expect(utterance.text).toBe('bright. I can read bright.')
+    expect(utterance.lang).toBe('en-SG')
+    utterance.onend?.()
+    utterance.onerror?.()
     expect(done).toHaveBeenCalledOnce()
   })
 
