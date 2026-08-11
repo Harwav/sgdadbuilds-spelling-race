@@ -54,13 +54,24 @@ export type SightWordMatch =
   | { outcome: 'accepted'; match: 'exact' | 'phonetic'; detected: string }
   | { outcome: 'retry'; reason: 'different-word'; detected: string | null }
 
+export type SightWordAttemptMode = 'isolated' | 'carrier'
+
+function evidenceCandidates(values: readonly string[], mode: SightWordAttemptMode): string[] {
+  const normalised = values.map(normaliseTranscript).filter(Boolean)
+  if (mode === 'isolated') return normalised
+  return normalised
+    .map((candidate) => candidate.split(' ').at(-1) ?? '')
+    .filter(Boolean)
+}
+
 export function evaluateSightWordAnswer(
   target: string,
   candidates: readonly string[],
   isFinal = true,
+  attemptMode: SightWordAttemptMode = 'isolated',
 ): SightWordMatch | null {
   const expected = normaliseTranscript(target)
-  const normalisedCandidates = candidates.map(normaliseTranscript).filter(Boolean)
+  const normalisedCandidates = evidenceCandidates(candidates, attemptMode)
 
   const exact = normalisedCandidates.find((candidate) => candidate === expected)
   if (exact) return { outcome: 'accepted', match: 'exact', detected: exact }

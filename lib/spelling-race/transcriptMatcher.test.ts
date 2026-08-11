@@ -54,6 +54,27 @@ describe('evaluateSightWordAnswer', () => {
     expect(evaluateSightWordAnswer('bright', ['bri'], false)).toBeNull()
   })
 
+  it('extracts the expected word from the fixed retry carrier phrase', () => {
+    expect(evaluateSightWordAnswer('bright', ['I can read bright'], true, 'carrier')).toEqual({
+      outcome: 'accepted', match: 'exact', detected: 'bright',
+    })
+    expect(evaluateSightWordAnswer('bright', ['I can read brite'], true, 'carrier')).toEqual({
+      outcome: 'accepted', match: 'phonetic', detected: 'brite',
+    })
+  })
+
+  it('does not let carrier words count as the expected word', () => {
+    expect(evaluateSightWordAnswer('read', ['I can read cat'], true, 'carrier')).toEqual({
+      outcome: 'retry', reason: 'different-word', detected: 'cat',
+    })
+  })
+
+  it('keeps unrelated short words strict in carrier mode', () => {
+    expect(evaluateSightWordAnswer('cat', ['I can read bat'], true, 'carrier')).toEqual({
+      outcome: 'retry', reason: 'different-word', detected: 'bat',
+    })
+  })
+
   it('accepts a strong phonetic variant for targets with five or more characters', () => {
     expect(evaluateSightWordAnswer('bright', ['brite'])).toEqual({
       outcome: 'accepted', match: 'phonetic', detected: 'brite',
