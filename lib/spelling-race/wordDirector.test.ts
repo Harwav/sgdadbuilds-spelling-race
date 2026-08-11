@@ -4,6 +4,7 @@ import {
   acceptActiveWord,
   assistActiveWord,
   createWordDirector,
+  deferActiveWord,
   showNextWord,
   skipActiveWord,
   timeoutActiveWord,
@@ -60,6 +61,23 @@ describe('word director', () => {
     state = acceptActiveWord(state, WORD_WINDOW_MS + 1).state
     state = showNextWord(state, WORD_WINDOW_MS + 2)
 
+    expect(state.activeWord).toBe('cat')
+  })
+
+  it('defers an unresolved word until two other words resolve', () => {
+    let state = showNextWord(createWordDirector(['cat', 'dog', 'sun']), 0)
+    state = deferActiveWord(state)
+
+    expect(state.results.at(-1)).toEqual({ word: 'cat', outcome: 'deferred', elapsedMs: null })
+    expect(state.timeoutCounts).toEqual({})
+
+    state = showNextWord(state, 1)
+    expect(state.activeWord).toBe('dog')
+    state = acceptActiveWord(state, 1).state
+    state = showNextWord(state, 2)
+    expect(state.activeWord).toBe('sun')
+    state = acceptActiveWord(state, 2).state
+    state = showNextWord(state, 3)
     expect(state.activeWord).toBe('cat')
   })
 

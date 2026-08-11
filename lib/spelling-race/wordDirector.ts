@@ -141,6 +141,26 @@ export function skipActiveWord(state: WordDirectorState): { state: WordDirectorS
   }
 }
 
+export function deferActiveWord(state: WordDirectorState): WordDirectorState {
+  if (state.activeWord === null) return state
+
+  const word = state.activeWord
+  const resolvedWordCount = state.resolvedWordCount + 1
+  return {
+    ...state,
+    activeWord: null,
+    activeSinceMs: null,
+    resolvedWordCount,
+    lastResolvedWord: word,
+    helpAvailable: false,
+    retryWords: [
+      ...state.retryWords.filter((retry) => retry.word !== word),
+      { word, availableAfterResolved: resolvedWordCount + 2 },
+    ],
+    results: [...state.results, { word, outcome: 'deferred', elapsedMs: null }],
+  }
+}
+
 function resolveActiveWord(
   state: WordDirectorState,
   outcome: 'accepted' | 'assisted',
