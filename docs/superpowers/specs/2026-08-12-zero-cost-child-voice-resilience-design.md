@@ -60,7 +60,7 @@ On the first final non-match:
 4. Show and speak the fixed carrier prompt: `I can read <word>`.
 5. Restart recognition and ask the child to repeat the carrier phrase.
 
-The second-attempt matcher accepts an exact target token anywhere after normalization, then applies the same target-specific evidence rules to the final content token. The fixed carrier words themselves never count as evidence for the target. If speech synthesis is unavailable, the written carrier prompt is shown and the retry still proceeds.
+The second-attempt matcher removes the fixed carrier words and evaluates the final content token with the same target-specific evidence rules. The fixed carrier words themselves never count as evidence for the target. If speech synthesis is unavailable, the written carrier prompt is shown and the retry still proceeds.
 
 Speech synthesis and recognition must never run simultaneously. The recognizer is stopped before prompting and restarted only after synthesis ends or after a bounded synthesis timeout.
 
