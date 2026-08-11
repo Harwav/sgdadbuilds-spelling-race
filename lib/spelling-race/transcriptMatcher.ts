@@ -59,9 +59,12 @@ export type SightWordAttemptMode = 'isolated' | 'carrier'
 function evidenceCandidates(values: readonly string[], mode: SightWordAttemptMode): string[] {
   const normalised = values.map(normaliseTranscript).filter(Boolean)
   if (mode === 'isolated') return normalised
-  return normalised
-    .map((candidate) => candidate.split(' ').at(-1) ?? '')
-    .filter(Boolean)
+  return normalised.flatMap((candidate) => {
+    const tokens = candidate.split(' ')
+    const hasCarrierPrefix = tokens[0] === 'i' && tokens[1] === 'can' && tokens[2] === 'read'
+    if (!hasCarrierPrefix || tokens.length < 4) return []
+    return [tokens.at(-1)!]
+  })
 }
 
 export function evaluateSightWordAnswer(

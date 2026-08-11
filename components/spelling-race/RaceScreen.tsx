@@ -432,7 +432,9 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
         recognitionCloseReasonRef.current = null
         voiceDiagnostics.record('ended', token, { restart: willRestart })
         if (pendingAction?.kind === 'prompt-retry') {
-          setFeedback('That was hard to hear. Listen, then try once more.')
+          setFeedback(`That was hard to hear. Listen, then try once more. Say: “I can read ${pendingAction.word}.”`)
+          setMicrophone('ready')
+          audioRef.current?.duck(true)
           const promptGeneration = retryPromptGenerationRef.current + 1
           retryPromptGenerationRef.current = promptGeneration
           retryPromptRef.current?.play(pendingAction.word, () => {

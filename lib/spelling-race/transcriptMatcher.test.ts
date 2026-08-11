@@ -67,6 +67,9 @@ describe('evaluateSightWordAnswer', () => {
     expect(evaluateSightWordAnswer('read', ['I can read cat'], true, 'carrier')).toEqual({
       outcome: 'retry', reason: 'different-word', detected: 'cat',
     })
+    expect(evaluateSightWordAnswer('read', ['I can read'], true, 'carrier')).toEqual({
+      outcome: 'retry', reason: 'different-word', detected: null,
+    })
   })
 
   it('keeps unrelated short words strict in carrier mode', () => {

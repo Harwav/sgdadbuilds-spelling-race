@@ -25,6 +25,7 @@ export function createRetryPromptPort(
 ): RetryPromptPort {
   let timeout: ReturnType<typeof setTimeout> | null = null
   let generation = 0
+  let speaking = false
 
   const clear = () => {
     if (timeout !== null) clearTimeout(timeout)
@@ -40,10 +41,13 @@ export function createRetryPromptPort(
         onDone()
         return
       }
+      if (speaking) adapter.cancel()
+      speaking = true
       let completed = false
       const finish = () => {
         if (completed || current !== generation) return
         completed = true
+        speaking = false
         clear()
         onDone()
       }
@@ -52,12 +56,18 @@ export function createRetryPromptPort(
       utterance.rate = 0.85
       utterance.onend = finish
       utterance.onerror = finish
-      timeout = setTimeout(finish, timeoutMs)
+      timeout = setTimeout(() => {
+        if (current !== generation) return
+        adapter.cancel()
+        speaking = false
+        finish()
+      }, timeoutMs)
       adapter.speak(utterance)
     },
     cancel() {
       generation += 1
       clear()
+      speaking = false
       adapter?.cancel()
     },
   }

@@ -80,11 +80,14 @@ const assets: LoadedWorldAssets = {
 
 let container: HTMLDivElement
 let root: Root
+let mounted: boolean
+let onExit: () => void
 
 beforeEach(async () => {
   vi.useFakeTimers()
   ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   window.matchMedia = vi.fn().mockReturnValue({ matches: false })
+  Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
   harness.sessions.length = 0
   harness.promptDone = null
   harness.promptWord = null
@@ -100,6 +103,8 @@ beforeEach(async () => {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
+  mounted = true
+  onExit = vi.fn()
   await act(async () => {
     root.render(
       <RaceScreen
@@ -109,14 +114,14 @@ beforeEach(async () => {
         route={route}
         assets={assets}
         onFinished={() => undefined}
-        onExit={() => undefined}
+        onExit={onExit}
       />,
     )
   })
 })
 
 afterEach(async () => {
-  await act(async () => root.unmount())
+  if (mounted) await act(async () => root.unmount())
   delete window.__spellingRaceVoice
   delete window.__tinyGrandPrixTest
   document.body.replaceChildren()
@@ -149,6 +154,22 @@ function button(text: string): HTMLButtonElement {
   return match as HTMLButtonElement
 }
 
+function labelledButton(label: string): HTMLButtonElement {
+  const match = container.querySelector(`button[aria-label="${label}"]`)
+  if (!match) throw new Error(`button not found with label: ${label}`)
+  return match as HTMLButtonElement
+}
+
+async function beginPendingPrompt(): Promise<() => void> {
+  await beginWord()
+  await act(async () => {
+    harness.sessions[0].result('something else')
+    harness.sessions[0].end()
+  })
+  expect(harness.promptDone).not.toBeNull()
+  return harness.promptDone!
+}
+
 describe('RaceScreen voice resilience', () => {
   it('prompts once, then defers an unresolved word without blocking the race', async () => {
     const firstWord = await beginWord()
@@ -157,6 +178,7 @@ describe('RaceScreen voice resilience', () => {
     expect(harness.promptWord).toBeNull()
     await act(async () => harness.sessions[0].end())
     expect(container.textContent).toContain('That was hard to hear. Listen, then try once more.')
+    expect(container.textContent).toContain(`I can read ${firstWord}.`)
     expect(harness.promptWord).toBe(firstWord)
     await advance(6_000)
     expect(container.querySelector('[data-testid="active-word"]')?.textContent).toBe(firstWord)
@@ -237,10 +259,60 @@ describe('RaceScreen voice resilience', () => {
       harness.sessions[0].end()
     })
     const stalePromptDone = harness.promptDone
+    const cancelCount = harness.promptCancelCount
     await act(async () => button('Skip').click())
-    expect(harness.promptCancelCount).toBeGreaterThan(0)
+    expect(harness.promptCancelCount).toBeGreaterThan(cancelCount)
 
     await act(async () => stalePromptDone?.())
+    await advance(20)
+    expect(harness.sessions).toHaveLength(1)
+  })
+
+  it('cancels a pending prompt while the race is paused', async () => {
+    const stalePromptDone = await beginPendingPrompt()
+    const cancelCount = harness.promptCancelCount
+    await act(async () => labelledButton('Pause').click())
+    await advance(0)
+    expect(harness.promptCancelCount).toBeGreaterThan(cancelCount)
+
+    await act(async () => stalePromptDone())
+    await advance(20)
+    expect(harness.sessions).toHaveLength(1)
+  })
+
+  it('cancels a pending prompt when the parent exits', async () => {
+    const stalePromptDone = await beginPendingPrompt()
+    const cancelCount = harness.promptCancelCount
+    await act(async () => button('Parent exit').click())
+    expect(onExit).toHaveBeenCalledOnce()
+    expect(harness.promptCancelCount).toBeGreaterThan(cancelCount)
+
+    await act(async () => stalePromptDone())
+    await advance(20)
+    expect(harness.sessions).toHaveLength(1)
+  })
+
+  it('cancels a pending prompt when the page becomes hidden', async () => {
+    const stalePromptDone = await beginPendingPrompt()
+    const cancelCount = harness.promptCancelCount
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    await advance(0)
+    expect(harness.promptCancelCount).toBeGreaterThan(cancelCount)
+
+    await act(async () => stalePromptDone())
+    await advance(20)
+    expect(harness.sessions).toHaveLength(1)
+  })
+
+  it('cancels a pending prompt on unmount', async () => {
+    const stalePromptDone = await beginPendingPrompt()
+    const cancelCount = harness.promptCancelCount
+    await act(async () => root.unmount())
+    mounted = false
+    expect(harness.promptCancelCount).toBeGreaterThan(cancelCount)
+
+    await act(async () => stalePromptDone())
     await advance(20)
     expect(harness.sessions).toHaveLength(1)
   })
