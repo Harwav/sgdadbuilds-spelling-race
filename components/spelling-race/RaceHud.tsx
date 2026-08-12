@@ -8,17 +8,24 @@ type RaceHudProps = {
   microphone: 'ready' | 'listening' | 'interrupted'
   muted: boolean
   paused: boolean
+  turboRatio: number
   onMute(): void
   onPause(): void
   onExit(): void
 }
 
-export default function RaceHud({ placement, lap, microphone, muted, paused, onMute, onPause, onExit }: RaceHudProps) {
+export default function RaceHud({ placement, lap, microphone, muted, paused, turboRatio, onMute, onPause, onExit }: RaceHudProps) {
   return (
     <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex items-start justify-between gap-3 text-sm">
       <div data-testid="race-hud-left" className="rounded-xl border px-3 py-2 shadow-lg" style={{ background: 'var(--surface-2)', borderColor: 'var(--line)' }}>
         <p className="text-lg font-bold">{ordinal(placement)}</p>
         <p className="font-semibold">Lap {lap} / 3</p>
+      </div>
+
+      <div className="absolute left-1/2 top-1 -translate-x-1/2 rounded-full border px-3 py-2 shadow-lg" style={{ background: 'var(--surface-2)', borderColor: 'var(--brand-yellow)' }}>
+        <div aria-label="Turbo remaining" aria-valuemax={100} aria-valuemin={0} aria-valuenow={Math.round(turboRatio * 100)} className="h-2 w-28 overflow-hidden rounded-full" role="progressbar" style={{ background: 'var(--grand-prix-shadow)' }}>
+          <span className="block h-full rounded-full" style={{ width: `${Math.min(1, Math.max(0, turboRatio)) * 100}%`, background: 'linear-gradient(90deg, var(--grand-prix-turbo-low), var(--grand-prix-turbo-high))' }} />
+        </div>
       </div>
 
       <div data-testid="race-hud-right" className="pointer-events-auto flex flex-col items-end gap-1">

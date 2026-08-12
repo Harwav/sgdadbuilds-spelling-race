@@ -25,7 +25,6 @@ import {
   createKartFromTemplate,
   disposeObject3D,
   readGrandPrixPalette,
-  type GrandPrixPalette,
 } from '../kartModel'
 import { createDistrictWorld } from './districts'
 import { createRaceGantry, validateRaceGantry } from './gantry'

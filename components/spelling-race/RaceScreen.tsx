@@ -744,6 +744,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
             microphone={microphone}
             muted={muted}
             paused={manualPaused}
+            turboRatio={wordTurboRatio}
             onMute={() => setMuted((value) => { audioRef.current?.setMuted(!value); return !value })}
             onPause={togglePause}
             onExit={exitRace}

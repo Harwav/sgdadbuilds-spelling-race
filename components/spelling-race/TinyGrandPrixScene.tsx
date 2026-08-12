@@ -60,7 +60,7 @@ export default function TinyGrandPrixScene(props: TinyGrandPrixSceneProps) {
       style={{ background: 'var(--grand-prix-sky)', borderColor: 'var(--line)' }}
     >
       <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 h-full w-full touch-none" />
-      <GantryPrompt ref={promptRef} activeWord={props.activeWord} turboRatio={props.turboRatio} />
+      <GantryPrompt ref={promptRef} activeWord={props.activeWord} />
     </div>
   )
 }
