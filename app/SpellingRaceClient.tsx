@@ -19,6 +19,7 @@ import {
 } from '@/lib/spelling-race/world/pageAssetLease'
 import { SINGAPORE_HEARTLAND_ROUTE } from '@/lib/spelling-race/world/routes'
 import type { RouteCard } from '@/lib/spelling-race/world/types'
+import { shouldLaunchBrowserPlayMode } from '@/lib/spelling-race/browserPlayMode'
 
 type SpellingRaceScreen = 'setup' | 'readiness' | 'countdown' | 'race' | 'finished' | 'refit' | 'changeCar'
 type SpellingRaceClientProps = {
@@ -61,6 +62,13 @@ export default function SpellingRaceClient({
       lease.release()
     }
   }, [assetCatalogue, route])
+
+  useEffect(() => {
+    if (!shouldLaunchBrowserPlayMode(process.env.NODE_ENV, window.location.search)) return
+    if (worldAssetState.status !== 'ready') return
+    const launch = window.setTimeout(() => setScreen('race'), 0)
+    return () => window.clearTimeout(launch)
+  }, [worldAssetState.status])
 
   useEffect(() => {
     return refitStore.subscribe(() => setRefitSnapshot(refitStore.read()))

@@ -252,6 +252,15 @@ describe('RaceScreen voice resilience', () => {
     expect(container.textContent).not.toContain('Turbo!')
   })
 
+  it('keeps the microphone prompt from intercepting the Skip control', async () => {
+    await act(async () => button('Start race').click())
+    await advance(5)
+    await advance(100)
+
+    const microphonePrompt = button('Tap mic, then say it').parentElement?.parentElement
+    expect(microphonePrompt?.className).toContain('pointer-events-none')
+  })
+
   it('cancels a pending prompt and ignores its stale completion after Skip', async () => {
     await beginWord()
     await act(async () => {

@@ -772,7 +772,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
             data-testid="skip-word"
             aria-label="Skip"
             onClick={skipWord}
-            className="absolute top-1/2 z-20 min-h-16 min-w-24 -translate-y-1/2 rounded-full border px-5 text-lg font-bold shadow-lg"
+            className="absolute top-[70%] z-20 min-h-16 min-w-24 -translate-y-1/2 rounded-full border px-5 text-lg font-bold shadow-lg"
             style={{
               right: 'max(1rem, env(safe-area-inset-right))',
               background: 'var(--brand-yellow)',
@@ -792,7 +792,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
         )}
 
         {stage === 'racing' && !director.helpAvailable && !frozen && (director.activeWord !== null || celebrating) && (
-          <div className="absolute inset-x-3 top-[47%] z-20 flex justify-center">
+          <div className="pointer-events-none absolute inset-x-3 top-[47%] z-20 flex justify-center">
             {celebrating ? (
               <div aria-live="polite" className="rounded-full px-6 py-3 text-base font-bold shadow-lg" style={{ background: 'var(--race-success)', color: 'var(--brand-navy)' }}>
                 <p>{speechReceipt ? speechReceiptText(speechReceipt) : 'Correct! Turbo boost!'}</p>
@@ -803,7 +803,7 @@ export default function RaceScreen({ difficulty, kartColour, steeringMode, route
               <p aria-live="polite" className="rounded-full px-5 py-3 text-base font-bold shadow-lg" style={{ background: 'var(--surface-2)', color: 'var(--grand-prix-kart-stripe)' }}>Listening… next word is loading!</p>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <button type="button" onClick={() => startRecognition(true)} className="min-h-12 rounded-full border px-6 text-base font-bold shadow-lg" style={{ background: 'var(--brand-yellow)', borderColor: 'var(--grand-prix-kart-stripe)', color: 'var(--brand-navy)' }}>Tap mic, then say it</button>
+                <button type="button" onClick={() => startRecognition(true)} className="pointer-events-auto min-h-12 rounded-full border px-6 text-base font-bold shadow-lg" style={{ background: 'var(--brand-yellow)', borderColor: 'var(--grand-prix-kart-stripe)', color: 'var(--brand-navy)' }}>Tap mic, then say it</button>
                 <p aria-live="polite" className="rounded-full px-4 py-1 text-xs font-semibold" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>The timer starts when the mic is ready.</p>
               </div>
             )}
