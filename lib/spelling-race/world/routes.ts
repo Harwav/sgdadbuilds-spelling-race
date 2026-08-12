@@ -164,5 +164,18 @@ function landmark(
   detailTier: LandmarkPlacement['detailTier'],
   required: boolean,
 ): LandmarkPlacement {
-  return { id, assetId, progress, lateral, elevation, yaw, scale, detailTier, required }
+  return {
+    id, assetId, progress, lateral, elevation, yaw, scale, detailTier, required,
+    footprint: footprintFor(assetId),
+  }
+}
+
+function footprintFor(assetId: AssetId): LandmarkPlacement['footprint'] {
+  if (assetId === 'rail-span') return { halfLength: 15.25, halfWidth: 2.8 }
+  if (assetId === 'shophouse-row') return { halfLength: 15.25, halfWidth: 3.2 }
+  if (assetId === 'hdb-slab' || assetId === 'hdb-point') return { halfLength: 5, halfWidth: 5 }
+  if (assetId === 'hawker-centre') return { halfLength: 5.5, halfWidth: 4 }
+  if (assetId === 'marina-bay-sands' || assetId === 'singapore-flyer') return { halfLength: 7, halfWidth: 7 }
+  if (assetId === 'supertree' || assetId === 'rain-tree') return { halfLength: 2.5, halfWidth: 2.5 }
+  return { halfLength: 1.5, halfWidth: 1.5 }
 }

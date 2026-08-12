@@ -22,6 +22,7 @@ export type LandmarkPlacement = {
   readonly scale: number
   readonly detailTier: DetailTier
   readonly required: boolean
+  readonly footprint: { readonly halfLength: number; readonly halfWidth: number }
 }
 export type RouteCard = {
   readonly id: RouteId
