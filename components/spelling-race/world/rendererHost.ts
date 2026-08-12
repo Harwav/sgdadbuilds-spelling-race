@@ -28,6 +28,7 @@ import {
   type GrandPrixPalette,
 } from '../kartModel'
 import { createDistrictWorld } from './districts'
+import { createRaceGantry, validateRaceGantry } from './gantry'
 import {
   configureSharedWorld,
   createSharedWorld,
@@ -83,7 +84,6 @@ type RendererHostInput = {
 type VisualCheckpoint = 'void-deck-grid' | 'hawker-sweep' | 'rail-shophouse-turn'
 
 const RIVAL_LANES = [-0.45, 0.1, 0.52] as const
-const KART_COLLISION_RADIUS = 1.05
 const CHECKPOINT_PROGRESS: Readonly<Record<VisualCheckpoint, number>> = {
   'void-deck-grid': 0.03,
   'hawker-sweep': 0.31,
@@ -97,7 +97,6 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
   }
 
   const kartTemplate = requiredModel(props.assets, 'kart')
-  const gantryTemplate = requiredModel(props.assets, 'gantry')
   const visualDebugBuild = process.env.NODE_ENV !== 'production'
   const palette = readGrandPrixPalette()
   const scope = createWorldDisposalScope()
@@ -122,15 +121,15 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
       scene.add(district.root)
       scope.defer(() => district.dispose())
 
-      const gantryModel = cloneGantry(gantryTemplate, palette)
+      const gantryModel = createRaceGantry(shared.track.envelope)
+      const gantryErrors = validateRaceGantry(gantryModel)
+      if (gantryErrors.length > 0) throw new Error(gantryErrors.join(', '))
       shared.gantry.children.forEach((child) => { child.visible = false })
       shared.gantry.add(gantryModel)
       const signAnchor = gantryModel.getObjectByName('sign_anchor')
       if (!signAnchor) throw new Error('Gantry template missing named part: sign_anchor')
-      const signFrame = visualDebugBuild ? gantryModel.getObjectByName('frame') : undefined
-      const signBoardProjector = signFrame instanceof THREE.Mesh
-        ? createSignBoardRectProjector(signFrame)
-        : null
+      const signFrame = visualDebugBuild ? gantryModel.getObjectByName('display_surface') : undefined
+      const signBoardProjector = signFrame instanceof THREE.Mesh ? createSignBoardRectProjector(signFrame) : null
 
       const player = props.equippedCarModel
         ? createCarFromTemplate(props.equippedCarModel, props.playerColour, palette, 'player')
@@ -390,38 +389,10 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
   }
 }
 
-function requiredModel(assets: LoadedWorldAssets, id: 'kart' | 'gantry'): THREE.Group {
+function requiredModel(assets: LoadedWorldAssets, id: 'kart'): THREE.Group {
   const model = assets.models.get(id)
   if (!model) throw new Error(`Loaded world model missing: ${id}`)
   return model
-}
-
-function cloneGantry(template: THREE.Group, palette: GrandPrixPalette): THREE.Group {
-  const clone = template.clone(true)
-  clone.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return
-    object.geometry = object.geometry.clone()
-    object.material = Array.isArray(object.material)
-      ? object.material.map((material) => material.clone())
-      : object.material.clone()
-    object.castShadow = object.name === 'frame'
-    object.receiveShadow = true
-
-    const colour = object.name === 'frame'
-      ? palette.gantry
-      : object.name === 'posts'
-        ? palette.gantryPost
-        : object.name === 'caps'
-          ? palette.barrierYellow
-          : undefined
-    if (!colour) return
-    const materials = Array.isArray(object.material) ? object.material : [object.material]
-    materials.forEach((material) => {
-      const paint = material as THREE.Material & { color?: THREE.Color }
-      paint.color?.set(colour)
-    })
-  })
-  return clone
 }
 
 function projectPrompt(
