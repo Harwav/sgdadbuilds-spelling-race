@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 // Only skyscraper / high-rise models — no farmhouses, shops, or low buildings.
 const BUILDING_MODEL_PATHS = [
@@ -36,47 +35,11 @@ type Owned = { materials: Set<THREE.Material>; geometries: Set<THREE.BufferGeome
 let cachedModels: THREE.Group[] | null = null
 let loadingPromise: Promise<THREE.Group[]> | null = null
 
-const loader = new GLTFLoader()
-
-function canLoadModels(): boolean {
-  try {
-    return typeof window !== 'undefined'
-      && typeof document !== 'undefined'
-      && typeof fetch === 'function'
-      && window.location.protocol.startsWith('http')
-  } catch {
-    return false
-  }
-}
-
-function startLoading(): Promise<THREE.Group[]> {
-  return Promise.all(
-    BUILDING_MODEL_PATHS.map((path) =>
-      new Promise<THREE.Group>((resolve) => {
-        loader.load(
-          path,
-          (gltf) => resolve(gltf.scene),
-          undefined,
-          () => resolve(new THREE.Group()),
-        )
-      }),
-    ),
-  ).then((scenes) => {
-    const valid = scenes.filter((scene) => scene.children.length > 0)
-    cachedModels = valid
-    return valid
-  }).catch(() => {
-    cachedModels = []
-    return []
-  })
-}
-
-if (canLoadModels()) {
-  loadingPromise = startLoading()
-} else {
-  cachedModels = []
-  loadingPromise = Promise.resolve([])
-}
+// The live race must reach its first usable frame without downloading the former
+// skyscraper catalogue. Curated background models may opt in later; the default
+// scene uses the lightweight procedural district fallback.
+cachedModels = []
+loadingPromise = Promise.resolve([])
 
 export async function loadBuildingModels(): Promise<THREE.Group[]> {
   if (cachedModels) return cachedModels
