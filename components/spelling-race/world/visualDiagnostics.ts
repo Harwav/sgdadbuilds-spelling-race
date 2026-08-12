@@ -7,6 +7,29 @@ export type SignBoardRect = {
   bottom: number
 }
 
+export type GantryDisplayRect = { left: number; top: number; width: number; height: number }
+
+export function projectGantryDisplay(
+  corners: readonly THREE.Vector3[], camera: THREE.Camera, width: number, height: number,
+): GantryDisplayRect | null {
+  if (corners.length !== 4 || width <= 0 || height <= 0) return null
+  const cameraPoint = new THREE.Vector3()
+  const projected = new THREE.Vector3()
+  const pixels = corners.map((corner) => {
+    cameraPoint.copy(corner).applyMatrix4(camera.matrixWorldInverse)
+    if (cameraPoint.z >= 0) return null
+    projected.copy(corner).project(camera)
+    return { x: (projected.x * 0.5 + 0.5) * width, y: (-projected.y * 0.5 + 0.5) * height }
+  })
+  if (pixels.some((pixel) => pixel === null)) return null
+  const visible = pixels as Array<{ x: number; y: number }>
+  const left = Math.max(0, Math.min(...visible.map((pixel) => pixel.x)))
+  const top = Math.max(0, Math.min(...visible.map((pixel) => pixel.y)))
+  const right = Math.min(width, Math.max(...visible.map((pixel) => pixel.x)))
+  const bottom = Math.min(height, Math.max(...visible.map((pixel) => pixel.y)))
+  return right > left && bottom > top ? { left, top, width: right - left, height: bottom - top } : null
+}
+
 export type SignBoardRectProjector = {
   project(camera: THREE.Camera, width: number, height: number): SignBoardRect | null
 }

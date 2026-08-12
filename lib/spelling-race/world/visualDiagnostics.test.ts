@@ -3,9 +3,18 @@ import { describe, expect, it } from 'vitest'
 import {
   countVisibleShadowCasters,
   createSignBoardRectProjector,
+  projectGantryDisplay,
 } from '@/components/spelling-race/world/visualDiagnostics'
 
 describe('visual diagnostics geometry', () => {
+  it('fits a DOM display to its four physical corners', () => {
+    const rect = projectGantryDisplay([
+      new THREE.Vector3(-1, 1, -8), new THREE.Vector3(1, 1, -8),
+      new THREE.Vector3(-1, -1, -8), new THREE.Vector3(1, -1, -8),
+    ], testCamera(), 400, 200)
+    expect(rect?.width).toBeGreaterThan(0)
+    expect(rect?.height).toBeGreaterThan(0)
+  })
   it('projects actual frame vertices into finite container pixels enclosing the sign anchor', () => {
     const frame = asymmetricFrame()
     const anchor = new THREE.Object3D()

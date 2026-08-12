@@ -41,6 +41,7 @@ import { placeOnTrack, sampleTrack, type TrackSample } from './track'
 import {
   countVisibleShadowCasters,
   createSignBoardRectProjector,
+  projectGantryDisplay,
   type SignBoardRect,
 } from './visualDiagnostics'
 
@@ -141,13 +142,16 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
         scene.add(kart)
         return kart
       })
-      return { shared, district, signAnchor, signBoardProjector, player, rivals }
+      const displayCorners = ['display_top_left', 'display_top_right', 'display_bottom_left', 'display_bottom_right']
+        .map((name) => gantryModel.getObjectByName(name))
+      if (displayCorners.some((corner) => !corner)) throw new Error('Gantry display corners are unavailable')
+      return { shared, district, signAnchor, signBoardProjector, displayCorners: displayCorners as THREE.Object3D[], player, rivals }
     } catch (error) {
       scope.dispose()
       throw error
     }
   })()
-  const { shared, district, signAnchor, signBoardProjector, player, rivals } = initialized
+  const { shared, district, signAnchor, signBoardProjector, displayCorners, player, rivals } = initialized
 
   const playerSample = trackSample()
   const kartSample = trackSample()
@@ -311,7 +315,8 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
       particleScale,
     )
 
-    projectPrompt(signAnchor, camera, prompt.element, projected, cameraSpace, width, height)
+    const displayRect = projectGantryDisplay(displayCorners.map((corner) => corner.getWorldPosition(new THREE.Vector3())), camera, width, height)
+    projectPrompt(signAnchor, camera, prompt.element, projected, cameraSpace, width, height, displayRect)
     renderer.render(scene, camera)
 
     const visible = document.visibilityState === 'visible'
@@ -402,13 +407,14 @@ function projectPrompt(
   cameraSpace: THREE.Vector3,
   width: number,
   height: number,
+  displayRect: { left: number; top: number; width: number; height: number } | null,
 ): void {
   anchor.getWorldPosition(projected)
   cameraSpace.copy(projected).applyMatrix4(camera.matrixWorldInverse)
   projected.project(camera)
   const x = (projected.x * 0.5 + 0.5) * width
   const y = (-projected.y * 0.5 + 0.5) * height
-  const hidden = cameraSpace.z >= 0
+  const hidden = !displayRect || cameraSpace.z >= 0
     || !Number.isFinite(x)
     || !Number.isFinite(y)
     || x < VIEWPORT_MARGIN
@@ -417,7 +423,8 @@ function projectPrompt(
     || y > height - VIEWPORT_MARGIN
   element.style.visibility = hidden ? 'hidden' : 'visible'
   if (!hidden) {
-    element.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`
+    element.style.width = `${displayRect.width}px`
+    element.style.transform = `translate3d(${displayRect.left}px, ${displayRect.top}px, 0)`
   }
 }
 
