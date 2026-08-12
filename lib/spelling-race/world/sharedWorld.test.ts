@@ -27,7 +27,7 @@ describe('shared Grand Prix world', () => {
 
     expect(track.halfWidth).toBe(5.6)
     expect(wrappedQuarter.point.distanceTo(atQuarter.point)).toBeLessThan(0.000_001)
-    expect(clampedRight.point.distanceTo(atQuarter.point)).toBeCloseTo(4.4, 5)
+    expect(clampedRight.point.distanceTo(atQuarter.point)).toBeCloseTo(track.envelope.tokens.kartHalfWidth, 3)
     expect(clampedRight.right.length()).toBeCloseTo(1, 6)
   })
 
@@ -51,9 +51,9 @@ describe('shared Grand Prix world', () => {
     expect((barrier.geometry.getAttribute('position') as THREE.BufferAttribute).count).toBeGreaterThan(24)
     barrier.geometry.computeBoundingBox()
     const barrierSize = barrier.geometry.boundingBox!.getSize(new THREE.Vector3())
-    expect(barrierSize.x).toBeLessThanOrEqual(3)
+    expect(barrierSize.x).toBeLessThanOrEqual(0.8)
     expect(barrierSize.y).toBeLessThanOrEqual(0.65)
-    expect(barrierSize.z).toBeLessThanOrEqual(0.8)
+    expect(barrierSize.z).toBeLessThanOrEqual(3)
   })
 
   it('keeps the high-quality motion counts and shared lighting contract', () => {

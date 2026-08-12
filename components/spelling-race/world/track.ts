@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { worldLapFraction } from '@/lib/spelling-race/world/progress'
-import { createRouteCurve } from '@/lib/spelling-race/world/routes'
 import type { RouteCard } from '@/lib/spelling-race/world/types'
+import { createTrackEnvelope, type TrackEnvelope } from '@/lib/spelling-race/world/trackEnvelope'
 import type { WorldMaterials } from './materials'
 
 const TRACK_SEGMENTS = 160
@@ -13,6 +13,7 @@ export type TrackWorld = {
   curve: THREE.CatmullRomCurve3
   root: THREE.Group
   halfWidth: number
+  envelope: TrackEnvelope
 }
 
 export type TrackSample = {
@@ -22,7 +23,8 @@ export type TrackSample = {
 }
 
 export function createTrackWorld(card: RouteCard, materials: WorldMaterials): TrackWorld {
-  const curve = createRouteCurve(card)
+  const envelope = createTrackEnvelope(card)
+  const curve = envelope.curve
   const root = new THREE.Group()
   root.name = 'track-world'
 
@@ -33,23 +35,21 @@ export function createTrackWorld(card: RouteCard, materials: WorldMaterials): Tr
   ground.receiveShadow = true
   root.add(ground)
 
-  const road = new THREE.Mesh(createTrackStrip(curve, card.circuit.halfWidth, TRACK_SEGMENTS), materials.asphalt)
+  const road = new THREE.Mesh(createTrackStrip(envelope, -envelope.tokens.asphaltHalfWidth, envelope.tokens.asphaltHalfWidth, TRACK_SEGMENTS), materials.asphalt)
   road.name = 'track-asphalt'
   road.receiveShadow = true
   root.add(road)
 
-  addKerbs(root, curve, card.circuit.halfWidth, materials)
-  addBarriers(root, curve, card.circuit.halfWidth, materials)
+  addBands(root, envelope, materials)
   addStartGrid(root, curve, card.circuit.halfWidth, materials)
-  return { curve, root, halfWidth: card.circuit.halfWidth }
+  return { curve, root, halfWidth: card.circuit.halfWidth, envelope }
 }
 
 export function sampleTrack(track: TrackWorld, progress: number, lateral: number, out: TrackSample): TrackSample {
-  const trackProgress = worldLapFraction(progress)
-  track.curve.getPointAt(trackProgress, out.point)
-  track.curve.getTangentAt(trackProgress, out.tangent).normalize()
-  out.right.set(out.tangent.z, 0, -out.tangent.x).normalize()
-  out.point.addScaledVector(out.right, clamp(lateral, -1, 1) * (track.halfWidth - 1.2))
+  const surface = track.envelope.surfaceAt(worldLapFraction(progress), clamp(lateral, -1, 1) * track.envelope.tokens.kartHalfWidth)
+  out.point.copy(surface.point)
+  out.tangent.copy(surface.tangent)
+  out.right.copy(surface.right)
   return out
 }
 
@@ -59,21 +59,16 @@ export function placeOnTrack(object: THREE.Object3D, track: TrackWorld, progress
   object.rotation.y = Math.atan2(out.tangent.x, out.tangent.z)
 }
 
-function createTrackStrip(curve: THREE.CatmullRomCurve3, halfWidth: number, segments: number): THREE.BufferGeometry {
+function createTrackStrip(envelope: TrackEnvelope, innerOffset: number, outerOffset: number, segments: number): THREE.BufferGeometry {
   const positions: number[] = []
   const uvs: number[] = []
   const indices: number[] = []
-  const point = new THREE.Vector3()
-  const tangent = new THREE.Vector3()
-  const right = new THREE.Vector3()
-
   for (let index = 0; index <= segments; index += 1) {
     const t = index / segments
-    curve.getPointAt(t, point)
-    curve.getTangentAt(t, tangent).normalize()
-    right.set(tangent.z, 0, -tangent.x).normalize()
-    positions.push(point.x + right.x * halfWidth, 0, point.z + right.z * halfWidth)
-    positions.push(point.x - right.x * halfWidth, 0, point.z - right.z * halfWidth)
+    const outer = envelope.surfaceAt(t, outerOffset)
+    const inner = envelope.surfaceAt(t, innerOffset)
+    positions.push(outer.point.x, outer.point.y, outer.point.z)
+    positions.push(inner.point.x, inner.point.y, inner.point.z)
     uvs.push(1, t * 10, 0, t * 10)
 
     if (index < segments) {
@@ -88,6 +83,32 @@ function createTrackStrip(curve: THREE.CatmullRomCurve3, halfWidth: number, segm
   geometry.setIndex(indices)
   geometry.computeVertexNormals()
   return geometry
+}
+
+function addBands(root: THREE.Group, envelope: TrackEnvelope, materials: WorldMaterials): void {
+  const kerbs = new THREE.Group()
+  kerbs.name = 'track-kerbs'
+  for (const side of [-1, 1] as const) {
+    const mesh = new THREE.Mesh(
+      createTrackStrip(envelope, side * envelope.tokens.kerbInnerOffset, side * envelope.tokens.kerbOuterOffset, KERB_SEGMENTS),
+      side < 0 ? materials.kerbRed : materials.kerbWhite,
+    )
+    mesh.position.y = 0.06
+    mesh.receiveShadow = true
+    kerbs.add(mesh)
+  }
+  const runoff = new THREE.Group()
+  runoff.name = 'track-runoff'
+  for (const side of [-1, 1] as const) {
+    runoff.add(new THREE.Mesh(
+      createTrackStrip(envelope, side * envelope.tokens.kerbOuterOffset, side * envelope.tokens.runoffOuterOffset, KERB_SEGMENTS),
+      materials.roadMarking,
+    ))
+  }
+  const barriers = new THREE.Group()
+  barriers.name = 'track-barriers'
+  addBarriers(barriers, envelope, materials)
+  root.add(kerbs, runoff, barriers)
 }
 
 function addStartGrid(root: THREE.Group, track: THREE.CatmullRomCurve3, halfWidth: number, materials: WorldMaterials): void {
@@ -120,50 +141,8 @@ function addStartGrid(root: THREE.Group, track: THREE.CatmullRomCurve3, halfWidt
   root.add(group)
 }
 
-function addKerbs(root: THREE.Group, track: THREE.CatmullRomCurve3, halfWidth: number, materials: WorldMaterials): void {
-  const geometry = new THREE.BoxGeometry(3.8, 0.16, 0.72)
-  const red = new THREE.InstancedMesh(geometry, materials.kerbRed, KERB_SEGMENTS)
-  const white = new THREE.InstancedMesh(geometry, materials.kerbWhite, KERB_SEGMENTS)
-  red.receiveShadow = true
-  white.receiveShadow = true
-  const point = new THREE.Vector3()
-  const tangent = new THREE.Vector3()
-  const right = new THREE.Vector3()
-  const position = new THREE.Vector3()
-  const quaternion = new THREE.Quaternion()
-  const scale = new THREE.Vector3(1, 1, 1)
-  const matrix = new THREE.Matrix4()
-  const rotation = new THREE.Euler()
-  let redIndex = 0
-  let whiteIndex = 0
-
-  for (let index = 0; index < KERB_SEGMENTS; index += 1) {
-    const t = index / KERB_SEGMENTS
-    track.getPointAt(t, point)
-    track.getTangentAt(t, tangent).normalize()
-    right.set(tangent.z, 0, -tangent.x).normalize()
-    rotation.set(0, Math.atan2(tangent.x, tangent.z), 0)
-    quaternion.setFromEuler(rotation)
-
-    for (const side of [-1, 1]) {
-      position.copy(point).addScaledVector(right, side * (halfWidth + 0.25))
-      position.y = 0.08
-      matrix.compose(position, quaternion, scale)
-      const target = index % 2 === 0 ? red : white
-      const targetIndex = index % 2 === 0 ? redIndex++ : whiteIndex++
-      target.setMatrixAt(targetIndex, matrix)
-    }
-  }
-
-  red.count = redIndex
-  white.count = whiteIndex
-  red.instanceMatrix.needsUpdate = true
-  white.instanceMatrix.needsUpdate = true
-  root.add(red, white)
-}
-
-function addBarriers(root: THREE.Group, track: THREE.CatmullRomCurve3, halfWidth: number, materials: WorldMaterials): void {
-  const geometry = new RoundedBoxGeometry(2.8, 0.58, 0.72, 3, 0.16)
+function addBarriers(root: THREE.Group, envelope: TrackEnvelope, materials: WorldMaterials): void {
+  const geometry = new RoundedBoxGeometry(0.72, 0.58, 2.8, 3, 0.16)
   const teal = new THREE.InstancedMesh(geometry, materials.barrierTeal, BARRIER_SEGMENTS)
   const yellow = new THREE.InstancedMesh(geometry, materials.barrierYellow, BARRIER_SEGMENTS)
   teal.name = 'track-barrier-teal'
@@ -173,9 +152,6 @@ function addBarriers(root: THREE.Group, track: THREE.CatmullRomCurve3, halfWidth
   yellow.castShadow = true
   yellow.receiveShadow = true
 
-  const point = new THREE.Vector3()
-  const tangent = new THREE.Vector3()
-  const right = new THREE.Vector3()
   const position = new THREE.Vector3()
   const quaternion = new THREE.Quaternion()
   const scale = new THREE.Vector3(1, 1, 1)
@@ -186,15 +162,13 @@ function addBarriers(root: THREE.Group, track: THREE.CatmullRomCurve3, halfWidth
 
   for (let index = 0; index < BARRIER_SEGMENTS; index += 1) {
     const t = index / BARRIER_SEGMENTS
-    track.getPointAt(t, point)
-    track.getTangentAt(t, tangent).normalize()
-    right.set(tangent.z, 0, -tangent.x).normalize()
-    rotation.set(0, Math.atan2(tangent.x, tangent.z), 0)
-    quaternion.setFromEuler(rotation)
 
     for (const side of [-1, 1]) {
-      position.copy(point).addScaledVector(right, side * (halfWidth + 2.25))
-      position.y = 0.29
+      const sample = envelope.surfaceAt(t, side * (envelope.tokens.barrierInnerOffset + 0.36))
+      position.copy(sample.point)
+      position.y += 0.29
+      rotation.set(0, Math.atan2(sample.tangent.x, sample.tangent.z), 0)
+      quaternion.setFromEuler(rotation)
       matrix.compose(position, quaternion, scale)
       const target = index % 2 === 0 ? teal : yellow
       const targetIndex = index % 2 === 0 ? tealIndex++ : yellowIndex++

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createTrackEnvelope, validateLandmarkClearance } from './trackEnvelope'
 import { SINGAPORE_HEARTLAND_ROUTE } from './routes'
+import { createTrackWorld } from '@/components/spelling-race/world/track'
+import { createWorldMaterials } from '@/components/spelling-race/world/materials'
+import * as THREE from 'three'
 
 describe('track envelope', () => {
   it('keeps every safety band outside the driveable asphalt', () => {
@@ -55,4 +58,37 @@ describe('track envelope', () => {
       'required landmark unsafe-required-landmark exceeds the safety envelope',
     ])
   })
+
+  it('renders distinct named road bands outside the asphalt using the envelope', () => {
+    const track = createTrackWorld(SINGAPORE_HEARTLAND_ROUTE, materials())
+
+    expect(track.envelope).toBeDefined()
+    expect(track.root.getObjectByName('track-kerbs')).toBeDefined()
+    expect(track.root.getObjectByName('track-runoff')).toBeDefined()
+    expect(track.root.getObjectByName('track-barriers')).toBeDefined()
+  })
 })
+
+function materials() {
+  return createWorldMaterials(palette(), {
+    routeId: 'singapore-heartland',
+    models: new Map(),
+    textures: new Map([
+      ['asphalt-diffuse', new THREE.Texture()],
+      ['asphalt-normal', new THREE.Texture()],
+      ['asphalt-roughness', new THREE.Texture()],
+    ]),
+    missingOptional: [],
+  })
+}
+
+function palette() {
+  return {
+    sky: '#8ac', grass: '#284', grassShadow: '#173', asphalt: '#222', kerbRed: '#d44', kerbWhite: '#fff',
+    barrierTeal: '#299', barrierYellow: '#fd4', kart: { red: '#d22', yellow: '#fd2', teal: '#299', purple: '#93c' },
+    kartStripe: '#fff', tyre: '#222', gantry: '#111', gantryPost: '#299', shadow: '#111', treeTrunk: '#642',
+    treeCanopy: '#284', sun: '#fff', ambient: '#def', concrete: '#bbb', hdbCream: '#fed', hdbCoral: '#d76',
+    hdbMint: '#8ba', shophouseMustard: '#da4', shophouseAqua: '#4aa', shophouseCoral: '#d76', hawkerRed: '#d44',
+    hawkerTeal: '#299', rail: '#888', window: '#9bd', roadMarking: '#fff',
+  }
+}
