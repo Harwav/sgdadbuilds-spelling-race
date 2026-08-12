@@ -30,7 +30,7 @@ describe('route-relative placement', () => {
     ])
     const matrix = routeTransform(curve, {
       id: 'test', assetId: 'gantry', progress: 0, lateral: 3, elevation: 2, yaw: Math.PI / 2, scale: 4,
-      detailTier: 'near', required: true,
+      detailTier: 'near', required: true, footprint: { halfLength: 1, halfWidth: 1 },
     })
     const position = new THREE.Vector3()
     const rotation = new THREE.Quaternion()

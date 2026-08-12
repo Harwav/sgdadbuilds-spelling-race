@@ -17,6 +17,7 @@ import {
   resetRendererSampling,
 } from '@/lib/spelling-race/world/rendererSession'
 import type { RouteCard, RouteId } from '@/lib/spelling-race/world/types'
+import { resolveVisualKartPoses, type VisualKartPose } from '@/lib/spelling-race/world/visualPose'
 import type { GantryPromptHandle } from '../GantryPrompt'
 import {
   applyKartPaint,
@@ -240,19 +241,24 @@ export function createRendererHost({ container, canvas, prompt, props }: Rendere
       snapshot.player.lateralPosition,
       snapshotAlpha,
     )
-    placeOnTrack(player, shared.track, playerProgress, playerLateralPosition, kartSample)
+    const requestedPoses: VisualKartPose[] = [{ id: 'player', progress: playerProgress, lateral: playerLateralPosition }]
     snapshot.rivals.forEach((rival, index) => {
-      const visual = rivals[index]
       const previousRival = previousRace.rivals[index]
       const rivalProgress = checkpointProgress === undefined
         ? previousRival
           ? THREE.MathUtils.lerp(previousRival.progress, rival.progress, snapshotAlpha)
           : rival.progress
         : checkpointProgress + (index - 1) * 4
-      if (visual) placeOnTrack(visual, shared.track, rivalProgress, RIVAL_LANES[index] ?? 0, kartSample)
+      requestedPoses.push({ id: rival.id, progress: rivalProgress, lateral: RIVAL_LANES[index] ?? 0 })
     })
-
-    resolveKartCollisions(player, rivals)
+    const poses = resolveVisualKartPoses(requestedPoses, { minProgressGap: 0.018, lateralBounds: [-1, 1] })
+    const playerPose = poses.find((pose) => pose.id === 'player')!
+    placeOnTrack(player, shared.track, playerPose.progress, playerPose.lateral, kartSample)
+    snapshot.rivals.forEach((rival, index) => {
+      const visual = rivals[index]
+      const pose = poses.find((candidate) => candidate.id === rival.id)
+      if (visual && pose) placeOnTrack(visual, shared.track, pose.progress, pose.lateral, kartSample)
+    })
 
     sampleTrack(shared.track, playerProgress, playerLateralPosition, playerSample)
     sampleTrack(shared.track, playerProgress + worldProgressAt(0.055), 0, gantrySample)
@@ -509,31 +515,4 @@ function trackSample(): TrackSample {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
-}
-
-/** Simple cylinder collision: push overlapping karts apart so they don't clip. */
-function resolveKartCollisions(player: THREE.Group, rivals: readonly THREE.Group[]): void {
-  const all = [player, ...rivals]
-
-  for (let i = 0; i < all.length; i += 1) {
-    for (let j = i + 1; j < all.length; j += 1) {
-      const a = all[i]
-      const b = all[j]
-      const radiusA = (a.userData.collisionRadius as number) ?? KART_COLLISION_RADIUS
-      const radiusB = (b.userData.collisionRadius as number) ?? KART_COLLISION_RADIUS
-      const minDist = radiusA + radiusB
-      const dx = a.position.x - b.position.x
-      const dz = a.position.z - b.position.z
-      const dist = Math.sqrt(dx * dx + dz * dz)
-      if (dist < minDist && dist > 0.0001) {
-        const overlap = (minDist - dist) * 0.5
-        const nx = dx / dist
-        const nz = dz / dist
-        a.position.x += nx * overlap
-        a.position.z += nz * overlap
-        b.position.x -= nx * overlap
-        b.position.z -= nz * overlap
-      }
-    }
-  }
 }

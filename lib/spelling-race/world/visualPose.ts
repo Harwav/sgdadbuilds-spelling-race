@@ -1,4 +1,4 @@
-export type VisualKartPose = { readonly id: string; readonly progress: number; readonly lateral: number }
+export type VisualKartPose = { readonly id: string | number; readonly progress: number; readonly lateral: number }
 
 export function resolveVisualKartPoses(
   requested: readonly VisualKartPose[],
